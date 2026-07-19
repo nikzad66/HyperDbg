@@ -56,6 +56,7 @@ ListeningSerialPortInDebugger()
     PDEBUGGEE_RESULT_OF_SEARCH_PACKET            SearchResultsPacket;
     PDEBUGGEE_DETAILS_AND_SWITCH_THREAD_PACKET   ChangeThreadPacket;
     PDEBUGGER_FLUSH_LOGGING_BUFFERS              FlushPacket;
+    PDEBUGGER_CPUID_REQUEST_RESPONSE             CpuidPacket;
     PDEBUGGER_CALLSTACK_REQUEST                  CallstackPacket;
     PDEBUGGER_SINGLE_CALLSTACK_FRAME             CallstackFramePacket;
     PDEBUGGER_DEBUGGER_TEST_QUERY_BUFFER         TestQueryPacket;
@@ -574,6 +575,2025 @@ StartAgain:
             // Signal the event relating to receiving result of flushing
             //
             DbgReceivedKernelResponse(DEBUGGER_SYNCRONIZATION_OBJECT_KERNEL_DEBUGGER_FLUSH_RESULT);
+
+            break;
+
+        case DEBUGGER_REMOTE_PACKET_REQUESTED_ACTION_DEBUGGEE_RESULT_OF_USER_CPUID:
+
+            CpuidPacket = (DEBUGGER_CPUID_REQUEST_RESPONSE *)(((CHAR *)TheActualPacket) + sizeof(DEBUGGER_REMOTE_PACKET));
+
+            if (CpuidPacket->KernelStatus == DEBUGGER_OPERATION_WAS_SUCCESSFUL)
+            {
+                UINT32                          FunctionId    = CpuidPacket->FunctionId;
+                UINT32                          SubFunctionId = CpuidPacket->SubFunctionId;
+                CONST CHAR *                    TypeName      = NULL;
+                CONST CHAR *                    AssocName;
+                                
+                switch (FunctionId)
+                {
+                case 0x0:
+                {
+                    CHAR Vendor[13] = {0};
+                    memcpy(&Vendor[0], &CpuidPacket->EBX, 4);
+                    memcpy(&Vendor[4], &CpuidPacket->EDX, 4);
+                    memcpy(&Vendor[8], &CpuidPacket->ECX, 4);
+                    Vendor[12] = '\0';
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 0 HAS NO SUBLEAVES               *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("  Vendor : %s\n", Vendor);
+                    ShowMessages("  Maximum supported basic leaf : %u\n", CpuidPacket->EAX);
+
+                    break;
+                }
+                case 0x1:
+                    //
+                    // EAX
+                    //
+                    ShowMessages("==== CPUID.(EAX=01H) Version / Additional / Feature Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 1 HAS NO SUBLEAVES               *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX: Version Information --\n\n");
+                    ShowMessages("  SteppingId       = %u\n",
+                                 CPUID_VERSION_INFORMATION_STEPPING_ID(CpuidPacket->EAX));
+                    ShowMessages("  Model            = %u\n",
+                                 CPUID_VERSION_INFORMATION_MODEL(CpuidPacket->EAX));
+                    ShowMessages("  FamilyId         = %u\n",
+                                 CPUID_VERSION_INFORMATION_FAMILY_ID(CpuidPacket->EAX));
+                    ShowMessages("  ProcessorType    = %u\n",
+                                 CPUID_VERSION_INFORMATION_PROCESSOR_TYPE(CpuidPacket->EAX));
+                    ShowMessages("  ExtendedModelId  = %u\n",
+                                 CPUID_VERSION_INFORMATION_EXTENDED_MODEL_ID(CpuidPacket->EAX));
+                    ShowMessages("  ExtendedFamilyId = %u\n\n",
+                                 CPUID_VERSION_INFORMATION_EXTENDED_FAMILY_ID(CpuidPacket->EAX));
+
+                    //
+                    // EBX: additional information
+                    //
+                    ShowMessages("-- EBX: Additional Information --\n\n");
+                    ShowMessages("  BrandIndex        = %u\n",
+                                 CPUID_ADDITIONAL_INFORMATION_BRAND_INDEX(CpuidPacket->EBX));
+                    ShowMessages("  ClflushLineSize   = %u (cache line = %u bytes)\n",
+                                 CPUID_ADDITIONAL_INFORMATION_CLFLUSH_LINE_SIZE(CpuidPacket->EBX),
+                                 CPUID_ADDITIONAL_INFORMATION_CLFLUSH_LINE_SIZE(CpuidPacket->EBX) * 8);
+                    ShowMessages("  MaxAddressableIds = %u\n",
+                                 CPUID_ADDITIONAL_INFORMATION_MAX_ADDRESSABLE_IDS(CpuidPacket->EBX));
+                    ShowMessages("  InitialApicId     = %u\n\n",
+                                 CPUID_ADDITIONAL_INFORMATION_INITIAL_APIC_ID(CpuidPacket->EBX));
+
+                    //
+                    // ECX: feature information
+                    //
+                    ShowMessages("-- ECX: Feature Information --\n\n");
+                    ShowMessages("  SSE3                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_STREAMING_SIMD_EXTENSIONS_3(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PCLMULQDQ             = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_PCLMULQDQ_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  DTES64                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_DS_AREA_64BIT_LAYOUT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MONITOR/MWAIT         = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_MONITOR_MWAIT_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CPL Qualified DS      = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_CPL_QUALIFIED_DEBUG_STORE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  VMX                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_VIRTUAL_MACHINE_EXTENSIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SMX                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_SAFER_MODE_EXTENSIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  EIST (SpeedStep)      = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_ENHANCED_INTEL_SPEEDSTEP_TECHNOLOGY(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  TM2                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_THERMAL_MONITOR_2(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SSSE3                 = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_SUPPLEMENTAL_STREAMING_SIMD_EXTENSIONS_3(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  L1 Context ID         = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_L1_CONTEXT_ID(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Silicon Debug         = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_SILICON_DEBUG(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  FMA                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_FMA_EXTENSIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CMPXCHG16B            = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_CMPXCHG16B_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  xTPR Update Control   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_XTPR_UPDATE_CONTROL(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PDCM                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_PERFMON_AND_DEBUG_CAPABILITY(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PCID                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_PROCESS_CONTEXT_IDENTIFIERS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  DCA                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_DIRECT_CACHE_ACCESS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SSE4.1                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_SSE41_SUPPORT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SSE4.2                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_SSE42_SUPPORT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  x2APIC                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_X2APIC_SUPPORT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MOVBE                 = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_MOVBE_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  POPCNT                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_POPCNT_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  TSC-Deadline          = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_TSC_DEADLINE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  AESNI                 = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_AESNI_INSTRUCTION_EXTENSIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  XSAVE/XRSTOR          = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_XSAVE_XRSTOR_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  OSXSAVE               = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_OSX_SAVE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  AVX                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_AVX_SUPPORT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  F16C                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_HALF_PRECISION_CONVERSION_INSTRUCTIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  RDRAND                = %s\n\n",
+                                 CPUID_FEATURE_INFORMATION_ECX_RDRAND_INSTRUCTION(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+
+                    //
+                    // EDX: feature information
+                    //
+                    ShowMessages("-- EDX: Feature Information --\n\n");
+                    ShowMessages("  FPU                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_FLOATING_POINT_UNIT_ON_CHIP(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  VME                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_VIRTUAL_8086_MODE_ENHANCEMENTS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  DE                    = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_DEBUGGING_EXTENSIONS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PSE                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PAGE_SIZE_EXTENSION(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  TSC                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_TIMESTAMP_COUNTER(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MSR (RDMSR/WRMSR)     = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_RDMSR_WRMSR_INSTRUCTIONS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PAE                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PHYSICAL_ADDRESS_EXTENSION(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MCE                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_MACHINE_CHECK_EXCEPTION(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CX8 (CMPXCHG8B)       = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_CMPXCHG8B(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  APIC On-Chip          = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_APIC_ON_CHIP(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SEP (SYSENTER/EXIT)   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_SYSENTER_SYSEXIT_INSTRUCTIONS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MTRR                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_MEMORY_TYPE_RANGE_REGISTERS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PGE                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PAGE_GLOBAL_BIT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MCA                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_MACHINE_CHECK_ARCHITECTURE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CMOV                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_CONDITIONAL_MOVE_INSTRUCTIONS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PAT                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PAGE_ATTRIBUTE_TABLE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PSE-36                = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PAGE_SIZE_EXTENSION_36BIT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PSN                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PROCESSOR_SERIAL_NUMBER(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CLFSH                 = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_CLFLUSH(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  DS (Debug Store)      = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_DEBUG_STORE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  ACPI (Thermal/Clock)  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_THERMAL_CONTROL_MSRS_FOR_ACPI(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  MMX                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_MMX_SUPPORT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  FXSR (FXSAVE/FXRSTOR) = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_FXSAVE_FXRSTOR_INSTRUCTIONS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SSE                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_SSE_SUPPORT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SSE2                  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_SSE2_SUPPORT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SS (Self Snoop)       = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_SELF_SNOOP(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HTT                   = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_HYPER_THREADING_TECHNOLOGY(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  TM (Thermal Monitor)  = %s\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_THERMAL_MONITOR(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PBE                   = %s\n\n",
+                                 CPUID_FEATURE_INFORMATION_EDX_PENDING_BREAK_ENABLE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+
+                    break;
+
+                case 0x2:
+                    ShowMessages("==== CPUID.(EAX=02H) Legacy Cache Descriptor ====\n\n");
+                    ShowMessages("  This leaf is deprecated and returns legacy cache information.\n");
+                    ShowMessages("  Use CPUID.(EAX=04H) for deterministic cache parameters instead.\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x3:
+                    ShowMessages("==== CPUID.(EAX=03H) ====\n\n");
+                    ShowMessages("  This leaf is reserved/not implemented on modern processors.\n");
+                    ShowMessages("  (Was previously used for Processor Serial Number on older CPUs)\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x4:
+                {
+                    UINT32 LineSize       = CPUID_EBX_SYSTEM_COHERENCY_LINE_SIZE(CpuidPacket->EBX);
+                    UINT32 Partitions     = CPUID_EBX_PHYSICAL_LINE_PARTITIONS(CpuidPacket->EBX);
+                    UINT32 Ways           = CPUID_EBX_WAYS_OF_ASSOCIATIVITY(CpuidPacket->EBX);
+                    UINT32 Sets           = CPUID_ECX_NUMBER_OF_SETS(CpuidPacket->ECX);
+                    UINT64 CacheSizeBytes = (UINT64)(Ways + 1) *
+                                            (UINT64)(Partitions + 1) *
+                                            (UINT64)(LineSize + 1) *
+                                            (UINT64)(Sets + 1);
+                    ShowMessages("==== CPUID.(EAX=04H) Deterministic Cache Parameters ====\n\n");
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->Leaf4MaxSubLeaf);
+
+                    ShowMessages("---- CPUID.(EAX=04H, ECX=%u) ----\n\n", SubFunctionId);
+
+                    //
+                    // EAX
+                    //
+                    switch (CPUID_EAX_CACHE_TYPE_FIELD(CpuidPacket->EAX))
+                    {
+                    case 0:
+                        TypeName = "Null (no more caches)";
+                        break;
+                    case 1:
+                        TypeName = "Data Cache";
+                        break;
+                    case 2:
+                        TypeName = "Instruction Cache";
+                        break;
+                    case 3:
+                        TypeName = "Unified Cache";
+                        break;
+                    default:
+                        TypeName = "Reserved";
+                        break;
+                    }
+
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  CacheTypeField                   = %u (%s)\n",
+                                 CPUID_EAX_CACHE_TYPE_FIELD(CpuidPacket->EAX),
+                                 TypeName);
+
+                    if (CPUID_EAX_CACHE_TYPE_FIELD(CpuidPacket->EAX) == 0)
+                    {
+                        ShowMessages("  (no more caches; stopping enumeration)\n\n");
+                        break;
+                    }
+
+                    ShowMessages("  CacheLevel                       = %u\n",
+                                 CPUID_EAX_CACHE_LEVEL(CpuidPacket->EAX));
+                    ShowMessages("  SelfInitializingCacheLevel       = %s\n",
+                                 CPUID_EAX_SELF_INITIALIZING_CACHE_LEVEL(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  FullyAssociativeCache            = %s%s\n",
+                                 CPUID_EAX_FULLY_ASSOCIATIVE_CACHE(CpuidPacket->EAX) ? "TRUE" : "FALSE",
+                                 CPUID_EAX_FULLY_ASSOCIATIVE_CACHE(CpuidPacket->EAX) ? " (fully associative)" : "");
+
+                    ShowMessages("  MaxAddressableIds(LogicalProcs)  (raw) = %u -> actual = %u (raw + 1)\n",
+                                 CPUID_EAX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS_SHARING_THIS_CACHE(CpuidPacket->EAX),
+                                 CPUID_EAX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS_SHARING_THIS_CACHE(CpuidPacket->EAX) + 1);
+                    ShowMessages("  MaxAddressableIds(Cores)         (raw) = %u -> actual = %u (raw + 1)\n\n",
+                                 CPUID_EAX_MAX_ADDRESSABLE_IDS_FOR_PROCESSOR_CORES_IN_PHYSICAL_PACKAGE(CpuidPacket->EAX),
+                                 CPUID_EAX_MAX_ADDRESSABLE_IDS_FOR_PROCESSOR_CORES_IN_PHYSICAL_PACKAGE(CpuidPacket->EAX) + 1);
+
+                    //
+                    // EBX
+                    //
+                    ShowMessages("-- EBX --\n\n");
+
+                    ShowMessages("  SystemCoherencyLineSize          (raw) = %u -> actual = %u bytes (raw + 1)\n",
+                                 LineSize,
+                                 LineSize + 1);
+                    ShowMessages("  PhysicalLinePartitions           (raw) = %u -> actual = %u (raw + 1)\n",
+                                 Partitions,
+                                 Partitions + 1);
+                    ShowMessages("  WaysOfAssociativity              (raw) = %u -> actual = %u (raw + 1)\n\n",
+                                 Ways,
+                                 Ways + 1);
+
+                    //
+                    // ECX
+                    //
+                    ShowMessages("-- ECX --\n\n");
+
+                    ShowMessages("  NumberOfSets                     (raw) = %u -> actual = %u (raw + 1)\n\n",
+                                 Sets,
+                                 Sets + 1);
+
+                    //
+                    // EDX
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  WriteBackInvalidate              = %s\n",
+                                 CPUID_EDX_WRITE_BACK_INVALIDATE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    ShowMessages("  CacheInclusiveness               = %s%s\n",
+                                 CPUID_EDX_CACHE_INCLUSIVENESS(CpuidPacket->EDX) ? "TRUE" : "FALSE",
+                                 CPUID_EDX_CACHE_INCLUSIVENESS(CpuidPacket->EDX) ? " (inclusive of lower levels)" : "");
+                    ShowMessages("  ComplexCacheIndexing             = %s%s\n\n",
+                                 CPUID_EDX_COMPLEX_CACHE_INDEXING(CpuidPacket->EDX) ? "TRUE" : "FALSE",
+                                 CPUID_EDX_COMPLEX_CACHE_INDEXING(CpuidPacket->EDX) ? " (complex/hashed indexing)" : " (direct mapped)");
+
+                    //
+                    // Cache Size Calculation (from spec formula)
+                    //
+                    ShowMessages("-- Cache Size --\n\n");
+                    ShowMessages("  Cache Size (per spec formula)    = %llu bytes (%llu KB, %llu MB)\n\n",
+                                 (ULONG64)CacheSizeBytes,
+                                 (ULONG64)(CacheSizeBytes / 1024),
+                                 (ULONG64)(CacheSizeBytes / (1024 * 1024)));
+
+                    break;
+                }
+                case 0x5:
+                    ShowMessages("==== CPUID.(EAX=05H) MONITOR/MWAIT Leaf ====\n\n");
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 5 HAS NO SUBLEAVES               *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    //
+                    // EAX
+                    //
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  SmallestMonitorLineSize = %u bytes\n\n",
+                                 CPUID_EAX_SMALLEST_MONITOR_LINE_SIZE(CpuidPacket->EAX));
+
+                    //
+                    // EBX
+                    //
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  LargestMonitorLineSize  = %u bytes\n\n",
+                                 CPUID_EBX_LARGEST_MONITOR_LINE_SIZE(CpuidPacket->EBX));
+
+                    //
+                    // ECX
+                    //
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  EnumerationOfMonitorMwaitExtensions             = %s\n",
+                                 CPUID_ECX_ENUMERATION_OF_MONITOR_MWAIT_EXTENSIONS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  SupportsTreatingInterruptsAsBreakEventForMwait  = %s\n\n",
+                                 CPUID_ECX_SUPPORTS_TREATING_INTERRUPTS_AS_BREAK_EVENT_FOR_MWAIT(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+
+                    //
+                    // EDX
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  NumberOfC0SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C0_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC1SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C1_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC2SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C2_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC3SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C3_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC4SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C4_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC5SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C5_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC6SubCStates = %u\n", CPUID_EDX_NUMBER_OF_C6_SUB_C_STATES(CpuidPacket->EDX));
+                    ShowMessages("  NumberOfC7SubCStates = %u\n\n", CPUID_EDX_NUMBER_OF_C7_SUB_C_STATES(CpuidPacket->EDX));
+
+                    break;
+
+                case 0x6:
+                    ShowMessages("==== CPUID.(EAX=06H) Thermal and Power Management Leaf ====\n\n");
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 6 HAS NO SUBLEAVES               *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    //
+                    // EAX
+                    //
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  TemperatureSensorSupported              = %s\n",
+                                 CPUID_EAX_TEMPERATURE_SENSOR_SUPPORTED(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  IntelTurboBoostTechnologyAvailable       = %s\n",
+                                 CPUID_EAX_INTEL_TURBO_BOOST_TECHNOLOGY_AVAILABLE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  ARAT (ApicTimerAlwaysRunning)            = %s\n",
+                                 CPUID_EAX_APIC_TIMER_ALWAYS_RUNNING(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PLN (PowerLimitNotification)             = %s\n",
+                                 CPUID_EAX_POWER_LIMIT_NOTIFICATION(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  ECMD (ClockModulationDuty)               = %s\n",
+                                 CPUID_EAX_CLOCK_MODULATION_DUTY(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PTM (PackageThermalManagement)           = %s\n",
+                                 CPUID_EAX_PACKAGE_THERMAL_MANAGEMENT(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP Base Registers                       = %s\n",
+                                 CPUID_EAX_HWP_BASE_REGISTERS(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP_Notification                         = %s\n",
+                                 CPUID_EAX_HWP_NOTIFICATION(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP_Activity_Window                      = %s\n",
+                                 CPUID_EAX_HWP_ACTIVITY_WINDOW(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP_Energy_Performance_Preference        = %s\n",
+                                 CPUID_EAX_HWP_ENERGY_PERFORMANCE_PREFERENCE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP_Package_Level_Request                = %s\n",
+                                 CPUID_EAX_HWP_PACKAGE_LEVEL_REQUEST(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HDC                                      = %s\n",
+                                 CPUID_EAX_HDC(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Intel Turbo Boost Max Technology 3.0     = %s\n",
+                                 CPUID_EAX_INTEL_TURBO_BOOST_MAX_TECHNOLOGY_3_AVAILABLE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP Capabilities                         = %s\n",
+                                 CPUID_EAX_HWP_CAPABILITIES(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  HWP PECI Override                        = %s\n",
+                                 CPUID_EAX_HWP_PECI_OVERRIDE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Flexible HWP                             = %s\n",
+                                 CPUID_EAX_FLEXIBLE_HWP(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Fast Access Mode for HWP Request MSR     = %s\n",
+                                 CPUID_EAX_FAST_ACCESS_MODE_FOR_HWP_REQUEST_MSR(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Ignoring Idle Logical Proc HWP Request   = %s\n",
+                                 CPUID_EAX_IGNORING_IDLE_LOGICAL_PROCESSOR_HWP_REQUEST(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                    ShowMessages("  Intel Thread Director                    = %s\n\n",
+                                 CPUID_EAX_INTEL_THREAD_DIRECTOR(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+
+                    //
+                    // EBX
+                    //
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  NumberOfInterruptThresholdsInThermalSensor = %u\n\n",
+                                 CPUID_EBX_NUMBER_OF_INTERRUPT_THRESHOLDS_IN_THERMAL_SENSOR(CpuidPacket->EBX));
+
+                    //
+                    // ECX
+                    //
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  HardwareCoordinationFeedbackCapability   = %s\n",
+                                 CPUID_ECX_HARDWARE_COORDINATION_FEEDBACK_CAPABILITY(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  NumberOfIntelThreadDirectorClasses (bit) = %s\n",
+                                 CPUID_ECX_NUMBER_OF_INTEL_THREAD_DIRECTOR_CLASSES(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                    ShowMessages("  PerformanceEnergyBiasPreference          = %u\n\n",
+                                 CPUID_ECX_PERFORMANCE_ENERGY_BIAS_PREFERENCE(CpuidPacket->ECX));
+
+                    //
+                    // EDX
+                    // EDX is fully reserved for this leaf; still routed through its macro for consistency.
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  Reserved                                 = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    break;
+
+                case 0x7:
+                    ShowMessages("==== CPUID.(EAX=07H) Structured Extended Feature Flags ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->LeafEaxMaxSubleaf);
+
+                    if (SubFunctionId == 0)
+                    {
+                        ShowMessages("---- CPUID.(EAX=07H, ECX=%u) ----\n\n", SubFunctionId);
+
+                        //
+                        // EAX
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  NumberOfSubLeaves (max ECX input) = %u\n\n", CPUID_EAX_NUMBER_OF_SUB_LEAVES(CpuidPacket->EAX));
+
+                        //
+                        // EBX
+                        //
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  FSGSBASE                       = %s\n", CPUID_EBX_FSGSBASE(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  IA32_TSC_ADJUST MSR            = %s\n", CPUID_EBX_IA32_TSC_ADJUST_MSR(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SGX                            = %s\n", CPUID_EBX_SGX(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  BMI1                           = %s\n", CPUID_EBX_BMI1(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  HLE                            = %s\n", CPUID_EBX_HLE(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX2                           = %s\n", CPUID_EBX_AVX2(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  FDP_EXCPTN_ONLY                = %s\n", CPUID_EBX_FDP_EXCPTN_ONLY(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SMEP                           = %s\n", CPUID_EBX_SMEP(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  BMI2                           = %s\n", CPUID_EBX_BMI2(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Enhanced REP MOVSB/STOSB       = %s\n", CPUID_EBX_ENHANCED_REP_MOVSB_STOSB(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  INVPCID                        = %s\n", CPUID_EBX_INVPCID(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  RTM                            = %s\n", CPUID_EBX_RTM(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  RDT-M (Monitoring)             = %s\n", CPUID_EBX_RDT_M(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Deprecates FPU CS/DS           = %s\n", CPUID_EBX_DEPRECATES(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MPX                            = %s\n", CPUID_EBX_MPX(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  RDT-A (Allocation)             = %s\n", CPUID_EBX_RDT(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512F                        = %s\n", CPUID_EBX_AVX512F(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512DQ                       = %s\n", CPUID_EBX_AVX512DQ(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  RDSEED                         = %s\n", CPUID_EBX_RDSEED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  ADX                            = %s\n", CPUID_EBX_ADX(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SMAP                           = %s\n", CPUID_EBX_SMAP(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_IFMA                    = %s\n", CPUID_EBX_AVX512_IFMA(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CLFLUSHOPT                     = %s\n", CPUID_EBX_CLFLUSHOPT(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CLWB                           = %s\n", CPUID_EBX_CLWB(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Intel Processor Trace          = %s\n", CPUID_EBX_INTEL(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512PF (Xeon Phi only)       = %s\n", CPUID_EBX_AVX512PF(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512ER (Xeon Phi only)       = %s\n", CPUID_EBX_AVX512ER(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512CD                       = %s\n", CPUID_EBX_AVX512CD(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SHA                            = %s\n", CPUID_EBX_SHA(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512BW                       = %s\n", CPUID_EBX_AVX512BW(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512VL                       = %s\n\n", CPUID_EBX_AVX512VL(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+
+                        //
+                        // ECX
+                        //
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  PREFETCHWT1 (Xeon Phi only)    = %s\n", CPUID_ECX_PREFETCHWT1(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_VBMI                    = %s\n", CPUID_ECX_AVX512_VBMI(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  UMIP                           = %s\n", CPUID_ECX_UMIP(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PKU                            = %s\n", CPUID_ECX_PKU(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  OSPKE                          = %s\n", CPUID_ECX_OSPKE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  WAITPKG                        = %s\n", CPUID_ECX_WAITPKG(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_VBMI2                   = %s\n", CPUID_ECX_AVX512_VBMI2(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CET_SS (shadow stack)          = %s\n", CPUID_ECX_CET_SS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  GFNI                           = %s\n", CPUID_ECX_GFNI(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  VAES                           = %s\n", CPUID_ECX_VAES(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  VPCLMULQDQ                     = %s\n", CPUID_ECX_VPCLMULQDQ(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_VNNI                    = %s\n", CPUID_ECX_AVX512_VNNI(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_BITALG                  = %s\n", CPUID_ECX_AVX512_BITALG(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  TME_EN                         = %s\n", CPUID_ECX_TME_EN(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_VPOPCNTDQ               = %s\n", CPUID_ECX_AVX512_VPOPCNTDQ(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  LA57 (5-level paging)          = %s\n", CPUID_ECX_LA57(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MAWAU (BNDLDX/BNDSTX)          = %u (NOT BOOLEAN)\n", CPUID_ECX_MAWAU(CpuidPacket->ECX));
+                        ShowMessages("  RDPID                          = %s\n", CPUID_ECX_RDPID(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  KL (Key Locker)                = %s\n", CPUID_ECX_KL(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CLDEMOTE                       = %s\n", CPUID_ECX_CLDEMOTE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MOVDIRI                        = %s\n", CPUID_ECX_MOVDIRI(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MOVDIR64B                      = %s\n", CPUID_ECX_MOVDIR64B(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SGX_LC (Launch Config)         = %s\n", CPUID_ECX_SGX_LC(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PKS                            = %s\n\n", CPUID_ECX_PKS(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+
+                        //
+                        // EDX
+                        //
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  AVX512_4VNNIW (Xeon Phi only)  = %s\n", CPUID_EDX_AVX512_4VNNIW(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_4FMAPS (Xeon Phi only)  = %s\n", CPUID_EDX_AVX512_4FMAPS(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Fast Short REP MOV             = %s\n", CPUID_EDX_FAST_SHORT_REP_MOV(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVX512_VP2INTERSECT            = %s\n", CPUID_EDX_AVX512_VP2INTERSECT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MD_CLEAR                       = %s\n", CPUID_EDX_MD_CLEAR(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SERIALIZE                      = %s\n", CPUID_EDX_SERIALIZE(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Hybrid part                    = %s\n", CPUID_EDX_HYBRID(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PCONFIG                        = %s\n", CPUID_EDX_PCONFIG(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CET_IBT (branch tracking)      = %s\n", CPUID_EDX_CET_IBT(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  IBRS/IBPB                      = %s\n", CPUID_EDX_IBRS_IBPB(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  STIBP                          = %s\n", CPUID_EDX_STIBP(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  L1D_FLUSH                      = %s\n", CPUID_EDX_L1D_FLUSH(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  IA32_ARCH_CAPABILITIES MSR     = %s\n", CPUID_EDX_IA32_ARCH_CAPABILITIES(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  IA32_CORE_CAPABILITIES MSR     = %s\n", CPUID_EDX_IA32_CORE_CAPABILITIES(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SSBD                           = %s\n\n", CPUID_EDX_SSBD(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+                    }
+                    else
+                    {
+                        //
+                        // This header only defines the EBX/ECX/EDX bitfield layout for sub-leaf
+                        // (ECX) = 0. If the processor reports further sub-leaves, decoding them
+                        // with the sub-leaf-0 struct would silently misinterpret the bits, so
+                        // instead their raw dwords are printed undecoded - consistent with this
+                        // file's rule of only reading a field through a macro that's actually
+                        // defined for it.
+                        //
+                        ShowMessages("  No bitfield macros are defined for these in ia32.h, so their\n");
+                        ShowMessages("  raw dwords are shown without decoding:\n");
+                        ShowMessages("    ECX=%u: EAX=0x%08X EBX=0x%08X ECX=0x%08X EDX=0x%08X\n\n",
+                                     SubFunctionId,
+                                     CpuidPacket->EAX,
+                                     CpuidPacket->EBX,
+                                     CpuidPacket->ECX,
+                                     CpuidPacket->EDX);
+                    }
+
+                    break;
+
+                case 0x8:
+                    ShowMessages("==== CPUID.(EAX=08H) ====\n\n");
+                    ShowMessages("  This leaf is reserved/not implemented on modern processors.\n");
+                    ShowMessages("  (Was previously used for Processor Serial Number on some CPUs)\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x9:
+                    ShowMessages("==== CPUID.(EAX=09H) Direct Cache Access Information ====\n\n");
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 9 HAS NO SUBLEAVES               *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    //
+                    // EAX mirrors IA32_PLATFORM_DCA_CAP[31:0] verbatim. ia32.h doesn't split
+                    // it into sub-fields here (those bit meanings live in the MSR's own
+                    // spec, not in this CPUID leaf), so it's read through its single
+                    // whole-dword macro and shown as raw hex rather than decoded further.
+                    //
+                    ShowMessages("  IA32_PLATFORM_DCA_CAP (EAX, mirrors MSR 1F8H) = 0x%08X\n",
+                                 CPUID_EAX_IA32_PLATFORM_DCA_CAP(CpuidPacket->EAX));
+
+                    //
+                    // EBX/ECX/EDX are fully reserved for this leaf.
+                    //
+                    ShowMessages("  Reserved (EBX) = 0x%08X\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+                    ShowMessages("  Reserved (ECX) = 0x%08X\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+                    ShowMessages("  Reserved (EDX) = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    break;
+
+                case 0xA:
+                    ShowMessages("==== CPUID.(EAX=0AH) Architectural Performance Monitoring Leaf ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 10 HAS NO SUBLEAVES              *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    if (CPUID_EAX_VERSION_ID_OF_ARCHITECTURAL_PERFORMANCE_MONITORING(CpuidPacket->EAX) == 0)
+                    {
+                        //
+                        // Per the spec: architectural perfmon is only supported if VersionId > 0.
+                        // At version 0 the rest of this leaf isn't architecturally meaningful, so stop here
+                        //
+                        ShowMessages("  VersionId = 0 -> architectural performance monitoring not supported;\n"
+                                     "  remaining fields in this leaf are not architecturally defined.\n\n");
+
+                        break;
+                    }
+
+                    //
+                    // EAX
+                    //
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  VersionId                               = %u\n",
+                                 CPUID_EAX_VERSION_ID_OF_ARCHITECTURAL_PERFORMANCE_MONITORING(CpuidPacket->EAX));
+                    ShowMessages("  NumberOfCountersPerLogicalProcessor     = %u\n",
+                                 CPUID_EAX_NUMBER_OF_PERFORMANCE_MONITORING_COUNTER_PER_LOGICAL_PROCESSOR(CpuidPacket->EAX));
+                    ShowMessages("  BitWidthOfPerformanceMonitoringCounter  = %u\n",
+                                 CPUID_EAX_BIT_WIDTH_OF_PERFORMANCE_MONITORING_COUNTER(CpuidPacket->EAX));
+                    ShowMessages("  EbxBitVectorLength                      = %u\n\n",
+                                 CPUID_EAX_EBX_BIT_VECTOR_LENGTH(CpuidPacket->EAX));
+
+                    //
+                    // EBX
+                    //
+                    ShowMessages("-- EBX (bit = 1 means the event is NOT available) --\n\n");
+                    ShowMessages("  CoreCycleEventNotAvailable                = %u\n",
+                                 CPUID_EBX_CORE_CYCLE_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  InstructionRetiredEventNotAvailable       = %u\n",
+                                 CPUID_EBX_INSTRUCTION_RETIRED_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  ReferenceCyclesEventNotAvailable          = %u\n",
+                                 CPUID_EBX_REFERENCE_CYCLES_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  LastLevelCacheReferenceEventNotAvailable  = %u\n",
+                                 CPUID_EBX_LAST_LEVEL_CACHE_REFERENCE_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  LastLevelCacheMissesEventNotAvailable     = %u\n",
+                                 CPUID_EBX_LAST_LEVEL_CACHE_MISSES_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  BranchInstructionRetiredEventNotAvailable = %u\n",
+                                 CPUID_EBX_BRANCH_INSTRUCTION_RETIRED_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+                    ShowMessages("  BranchMispredictRetiredEventNotAvailable  = %u\n\n",
+                                 CPUID_EBX_BRANCH_MISPREDICT_RETIRED_EVENT_NOT_AVAILABLE(CpuidPacket->EBX));
+
+                    if (CPUID_EAX_EBX_BIT_VECTOR_LENGTH(CpuidPacket->EAX) < 7)
+                    {
+                        ShowMessages("  NOTE: EbxBitVectorLength=%u (<7): bits at/after this length are not\n"
+                                     "        architecturally defined on this CPU; treat them as unreliable.\n",
+                                     CPUID_EAX_EBX_BIT_VECTOR_LENGTH(CpuidPacket->EAX));
+                    }
+
+                    //
+                    // ECX
+                    //
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  Reserved                                   = 0x%08X\n\n",
+                                 CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                    //
+                    // EDX: fixed-function counter fields only defined if VersionId > 1
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    if (CPUID_EAX_VERSION_ID_OF_ARCHITECTURAL_PERFORMANCE_MONITORING(CpuidPacket->EAX) > 1)
+                    {
+                        ShowMessages("  NumberOfFixedFunctionPerformanceCounters   = %u\n",
+                                     CPUID_EDX_NUMBER_OF_FIXED_FUNCTION_PERFORMANCE_COUNTERS(CpuidPacket->EDX));
+                        ShowMessages("  BitWidthOfFixedFunctionPerformanceCounters = %u\n\n",
+                                     CPUID_EDX_BIT_WIDTH_OF_FIXED_FUNCTION_PERFORMANCE_COUNTERS(CpuidPacket->EDX));
+                    }
+                    else
+                    {
+                        ShowMessages("  NOTE: VersionId=%u (<=1): fixed-function counter fields are not\n",
+                                     CPUID_EAX_VERSION_ID_OF_ARCHITECTURAL_PERFORMANCE_MONITORING(CpuidPacket->EAX));
+                        ShowMessages("        architecturally defined; showing raw macro output anyway:\n");
+                        ShowMessages("  NumberOfFixedFunctionPerformanceCounters   = %u (undefined)\n",
+                                     CPUID_EDX_NUMBER_OF_FIXED_FUNCTION_PERFORMANCE_COUNTERS(CpuidPacket->EDX));
+                        ShowMessages("  BitWidthOfFixedFunctionPerformanceCounters = %u (undefined)\n",
+                                     CPUID_EDX_BIT_WIDTH_OF_FIXED_FUNCTION_PERFORMANCE_COUNTERS(CpuidPacket->EDX));
+                    }
+
+                    ShowMessages("  AnyThreadDeprecation                       = %s\n\n",
+                                 CPUID_EDX_ANY_THREAD_DEPRECATION(CpuidPacket->EDX) ? "TRUE" : "FALSE");
+
+                    break;
+
+                case 0xB:
+
+                    //
+                    // Check if this leaf is supported or not
+                    //
+                    if (!CpuidPacket->LeafBSupported)
+                    {
+                        ShowMessages("==== CPUID.(EAX=0BH) Extended Topology Enumeration ====\n");
+                        ShowMessages("  Leaf presence check failed: CPUID.0BH:EBX[15:0] == 0 at sub-leaf 0.\n"
+                                     "  This processor does not implement leaf 0BH (consider leaf 1FH instead).\n\n");
+                        break;
+                    }
+                    ShowMessages("==== CPUID.(EAX=0BH) Extended Topology Enumeration ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->LeafBMaxSubleaf);
+
+                    switch (CPUID_ECX_LEVEL_TYPE(CpuidPacket->ECX))
+                    {
+                    case 0:
+                        TypeName = "Invalid";
+                        break;
+                    case 1:
+                        TypeName = "SMT (Hyper-Threading)";
+                        break;
+                    case 2:
+                        TypeName = "Core";
+                        break;
+                    default:
+                        TypeName = "Reserved";
+                        break;
+                    }
+
+                    ShowMessages("---- CPUID.(EAX=0BH, ECX=%u) ----\n\n", SubFunctionId);
+
+                    //
+                    // ECX: Level number and type
+                    //
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  LevelNumber (echoes ECX input) = %u\n",
+                                 CPUID_ECX_LEVEL_NUMBER(CpuidPacket->ECX));
+                    ShowMessages("  LevelType                      = %u (%s)\n\n",
+                                 CPUID_ECX_LEVEL_TYPE(CpuidPacket->ECX),
+                                 TypeName);
+                    //
+                    // EAX: Shift count
+                    //
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  X2ApicIdToUniqueTopologyIdShift = %u\n\n",
+                                 CPUID_EAX_X2APIC_ID_TO_UNIQUE_TOPOLOGY_ID_SHIFT(CpuidPacket->EAX));
+
+                    //
+                    // EBX: Number of logical processors (diagnostic only)
+                    //
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  NumberOfLogicalProcessorsAtThisLevelType = %u (DIAGNOSTIC ONLY - do not use for topology enumeration)\n\n",
+                                 CPUID_EBX_NUMBER_OF_LOGICAL_PROCESSORS_AT_THIS_LEVEL_TYPE(CpuidPacket->EBX));
+
+                    //
+                    // EDX: x2APIC ID (constant across all sub-leaves)
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  X2ApicId (current logical processor) = %u\n\n",
+                                 CPUID_EDX_X2APIC_ID(CpuidPacket->EDX));
+
+                    break;
+
+                case 0xC:
+                    ShowMessages("==== CPUID.(EAX=0CH) ====\n\n");
+                    ShowMessages("  This leaf is reserved (not implemented).\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0xD:
+                    ShowMessages("==== CPUID.(EAX=0DH) Processor Extended State Enumeration ====\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = 62              *\n"
+                                 "  *******************************************************\n\n");
+
+                    if (SubFunctionId == 0)
+                    {
+                        ShowMessages("-- EAX (XCR0 lower 32 bits) --\n\n");
+                        ShowMessages("  X87State (bit 0)               = %s\n", CPUID_EAX_X87_STATE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SSEState (bit 1)               = %s\n", CPUID_EAX_SSE_STATE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  AVXState (bit 2)               = %s\n", CPUID_EAX_AVX_STATE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MPXState (bits 4:3)            = %u\n", CPUID_EAX_MPX_STATE(CpuidPacket->EAX));
+                        ShowMessages("  AVX512State (bits 7:5)         = %u\n", CPUID_EAX_AVX_512_STATE(CpuidPacket->EAX));
+                        ShowMessages("  UsedForIa32Xss1 (bit 8)        = %s\n", CPUID_EAX_USED_FOR_IA32_XSS_1(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PKRUState (bit 9)              = %s\n", CPUID_EAX_PKRU_STATE(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  UsedForIa32Xss2 (bit 13)       = %s\n\n", CPUID_EAX_USED_FOR_IA32_XSS_2(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  MaxSizeRequiredByEnabledFeaturesInXcr0 = %u bytes\n\n",
+                                     CPUID_EBX_MAX_SIZE_REQUIRED_BY_ENABLED_FEATURES_IN_XCR0(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  MaxSizeOfXsaveXrstorSaveArea           = %u bytes\n\n",
+                                     CPUID_ECX_MAX_SIZE_OF_XSAVE_XRSTOR_SAVE_AREA(CpuidPacket->ECX));
+                        ShowMessages("-- EDX (XCR0 upper 32 bits) --\n\n");
+                        ShowMessages("  Xcr0SupportedBits (bits 63:32 of XCR0) = 0x%08X\n\n",
+                                     CPUID_EDX_XCR0_SUPPORTED_BITS(CpuidPacket->EDX));
+                    }
+
+                    else if (SubFunctionId == 1)
+                    {
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  SupportsXsavecAndCompactedXrstor (XSAVEC) = %s\n",
+                                     CPUID_EAX_SUPPORTS_XSAVEC_AND_COMPACTED_XRSTOR(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SupportsXgetbvWithEcx1                     = %s\n",
+                                     CPUID_EAX_SUPPORTS_XGETBV_WITH_ECX_1(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SupportsXsaveXrstorAndIa32Xss (XSAVES)     = %s\n\n",
+                                     CPUID_EAX_SUPPORTS_XSAVE_XRSTOR_AND_IA32_XSS(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  SizeOfXsaveArea (XCR0 | IA32_XSS enabled) = %u bytes\n",
+                                     CPUID_EBX_SIZE_OF_XSAVE_AREAD(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX (IA32_XSS lower 32 bits) --\n\n");
+                        ShowMessages("  UsedForXcr01 (bits 7:0)              = 0x%02X\n",
+                                     CPUID_ECX_USED_FOR_XCR0_1(CpuidPacket->ECX));
+                        ShowMessages("  PtState (bit 8)                      = %s\n",
+                                     CPUID_ECX_PT_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  UsedForXcr02 (bit 9)                 = %s\n",
+                                     CPUID_ECX_USED_FOR_XCR0_2(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CetUserState (bit 11)                = %s\n",
+                                     CPUID_ECX_CET_USER_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  CetSupervisorState (bit 12)          = %s\n",
+                                     CPUID_ECX_CET_SUPERVISOR_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  HdcState (bit 13)                    = %s\n",
+                                     CPUID_ECX_HDC_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  LbrState (bit 15)                    = %s\n",
+                                     CPUID_ECX_LBR_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  HwpState (bit 16)                    = %s\n\n",
+                                     CPUID_ECX_HWP_STATE(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- EDX (IA32_XSS upper 32 bits) --\n\n");
+                        ShowMessages("  SupportedUpperIa32XssBits (bits 63:32) = 0x%08X\n\n",
+                                     CPUID_EDX_SUPPORTED_UPPER_IA32_XSS_BITS(CpuidPacket->EDX));
+                    }
+
+                    else if (SubFunctionId >= 2)
+                    {
+                        //
+                        // Check if the user input is valid
+                        // Need to check both XCR0 and IA32_XSS vectors
+                        //
+                        UINT64 ValidBits = CpuidPacket->XCR0Vector | CpuidPacket->IA32_XSS_Vector;
+
+                        //
+                        // Validate if this sub-leaf is supported
+                        //
+                        if (((ValidBits >> SubFunctionId) & (UINT64)1) == 0)
+                        {
+                            ShowMessages("  Sub-leaf %u is NOT supported on this CPU\n", SubFunctionId);
+                            ShowMessages("  Valid sub-leaves are those with bits set in:\n");
+                            ShowMessages("    XCR0 vector:     0x%016llX\n", (ULONG64)CpuidPacket->XCR0Vector);
+                            ShowMessages("    IA32_XSS vector: 0x%016llX\n", (ULONG64)CpuidPacket->IA32_XSS_Vector);
+                            ShowMessages("    Combined vector: 0x%016llX\n\n", (ULONG64)ValidBits);
+
+                            break;
+                        }
+
+                        ShowMessages("-- State Component Information --\n\n");
+                        ShowMessages("  SaveAreaSize (EAX)   = %u bytes\n",
+                                     CPUID_EAX_IA32_PLATFORM_DCA_CAP(CpuidPacket->EAX));
+                        ShowMessages("  SaveAreaOffset (EBX) = %u bytes\n",
+                                     CPUID_EBX_RESERVED(CpuidPacket->EBX));
+                        ShowMessages("  ManagedViaIa32Xss (ECX bit 0) = %u (%s)\n",
+                                     CPUID_ECX_ECX_2(CpuidPacket->ECX),
+                                     CPUID_ECX_ECX_2(CpuidPacket->ECX) ? "IA32_XSS" : "XCR0");
+                        ShowMessages("  Aligned64ByteBoundary (ECX bit 1) = %u%s\n",
+                                     CPUID_ECX_ECX_1(CpuidPacket->ECX),
+                                     CPUID_ECX_ECX_1(CpuidPacket->ECX) ? " (next 64-byte boundary)" : " (immediately following)");
+                        ShowMessages("  Reserved (EDX) = 0x%08X\n\n",
+                                     CPUID_EDX_RESERVED(CpuidPacket->EDX));
+                    }
+
+                    break;
+
+                case 0xE:
+                    ShowMessages("==== CPUID.(EAX=0EH) ====\n\n");
+                    ShowMessages("  This leaf is reserved (not implemented).\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0xF: // 0xF = 15 (decimal); CPUID_INTEL_RESOURCE_DIRECTOR_TECHNOLOGY_MONITORING_INFORMATION
+                    ShowMessages("==== CPUID.(EAX=0FH) Intel RDT Monitoring ====\n\n");
+                    ShowMessages("  This leaf is not yet implemented in HyperDbg.\n");
+                    ShowMessages("  (Intel Resource Director Technology - Monitoring)\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x10:
+                    ShowMessages("==== CPUID.(EAX=10H, ECX=%u) Intel RDT Allocation Information ====\n\n", SubFunctionId);
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = 3               *\n"
+                                 "  *******************************************************\n\n");
+
+                    if (SubFunctionId == 0)
+                    {
+                        //
+                        // Resource type enumeration
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  Ia32PlatformDcaCap = 0x%08X\n\n",
+                                     CPUID_EAX_IA32_PLATFORM_DCA_CAP(CpuidPacket->EAX));
+
+                        //
+                        // EBX
+                        //
+                        ShowMessages("-- EBX (Supported Allocation Types) --\n\n");
+                        ShowMessages("  Raw value = 0x%08X\n", CpuidPacket->EBX);
+                        ShowMessages("  L3 Cache Allocation (bit 1) = %s\n",
+                                     CPUID_EBX_SUPPORTS_L3_CACHE_ALLOCATION_TECHNOLOGY(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  L2 Cache Allocation (bit 2) = %s\n",
+                                     CPUID_EBX_SUPPORTS_L2_CACHE_ALLOCATION_TECHNOLOGY(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Memory Bandwidth Allocation (bit 3) = %s\n\n",
+                                     CPUID_EBX_SUPPORTS_MEMORY_BANDWIDTH_ALLOCATION(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+
+                        //
+                        // ECX
+                        //
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                        //
+                        // EDX
+                        //
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+                    }
+
+                    else if (SubFunctionId == 1)
+                    {
+                        //
+                        // L3 cache allocation
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  LengthOfCapacityBitMask (minus-one) = %u (actual = %u bits)\n\n",
+                                     CPUID_EAX_LENGTH_OF_CAPACITY_BIT_MASK(CpuidPacket->EAX),
+                                     CPUID_EAX_LENGTH_OF_CAPACITY_BIT_MASK(CpuidPacket->EAX) + 1);
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  Bit-granular map = 0x%08X\n\n", CPUID_EBX_EBX_0(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  CodeAndDataPriorizationTechnologySupported = %s%s\n\n",
+                                     CPUID_ECX_CODE_AND_DATA_PRIORIZATION_TECHNOLOGY_SUPPORTED(CpuidPacket->ECX) ? "TRUE" : "FALSE",
+                                     CPUID_ECX_CODE_AND_DATA_PRIORIZATION_TECHNOLOGY_SUPPORTED(CpuidPacket->ECX) ? " (CDP supported)" : "");
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  HighestCosNumberSupported = %u (actual = %u COS)\n\n",
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX),
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX) + 1);
+                    }
+
+                    else if (SubFunctionId == 2)
+                    {
+                        //
+                        // Sub-leaf 2 (L2 Cache Allocation)
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  LengthOfCapacityBitMask (minus-one) = %u (actual = %u bits)\n\n",
+                                     CPUID_EAX_LENGTH_OF_CAPACITY_BIT_MASK(CpuidPacket->EAX),
+                                     CPUID_EAX_LENGTH_OF_CAPACITY_BIT_MASK(CpuidPacket->EAX) + 1);
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  Bit-granular map = 0x%08X\n\n", CPUID_EBX_EBX_0(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  HighestCosNumberSupported = %u (actual = %u COS)\n\n",
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX),
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX) + 1);
+                    }
+
+                    else if (SubFunctionId == 3)
+                    {
+                        //
+                        // Sub-leaf 3 (Memory Bandwidth Allocation)
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  MaxMbaThrottlingValue (minus-one) = %u (actual = %u)\n\n",
+                                     CPUID_EAX_MAX_MBA_THROTTLING_VALUE(CpuidPacket->EAX),
+                                     CPUID_EAX_MAX_MBA_THROTTLING_VALUE(CpuidPacket->EAX) + 1);
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  ResponseOfDelayIsLinear = %s%s\n",
+                                     CPUID_ECX_RESPONSE_OF_DELAY_IS_LINEAR(CpuidPacket->ECX) ? "TRUE" : "FALSE",
+                                     CPUID_ECX_RESPONSE_OF_DELAY_IS_LINEAR(CpuidPacket->ECX) ? " (linear response)" : " (non-linear)\n\n");
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  HighestCosNumberSupported = %u (actual = %u COS)\n\n",
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX),
+                                     CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidPacket->EDX) + 1);
+                    }
+
+                    else
+                    {
+                        ShowMessages("  Sub-leaf %u is NOT supported on this CPU\n", SubFunctionId);
+                        ShowMessages("  raw bytes: EAX = %u\n  EBX = %u\n  ECX = %u\n  EDX = %u\n\n",
+                                     CpuidPacket->EAX,
+                                     CpuidPacket->EBX,
+                                     CpuidPacket->ECX,
+                                     CpuidPacket->EDX);
+                    }
+
+                    break;
+
+                case 0x11:
+                    ShowMessages("==== CPUID.(EAX=11H) ====\n\n");
+                    ShowMessages("  This leaf is reserved (not implemented).\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x12:
+                {
+                    //
+                    // SGX, not DAT. 0x12 = 18 (decimal)
+                    //
+                    ShowMessages("==== CPUID.(EAX=12H) Intel SGX Information ====\n\n");
+
+                    if (!CpuidPacket->Leaf12Supported)
+                    {
+                        ShowMessages("  SGX is not supported on this CPU (CPUID.7H:EBX[2] = 0).\n\n");
+                        break;
+                    }
+
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->Leaf12MaxSubLeaf);
+
+                    if (SubFunctionId == 0)
+                    {
+                        //
+                        // SGX capabilities
+                        //
+                        ShowMessages("-- EAX (SGX Capabilities) --\n\n");
+                        ShowMessages("  SGX1 Support (bit 0)           = %s\n",
+                                     CPUID_EAX_SGX1(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  SGX2 Support (bit 1)           = %s\n",
+                                     CPUID_EAX_SGX2(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  ENCLV Advanced (bit 5)         = %s\n",
+                                     CPUID_EAX_SGX_ENCLV_ADVANCED(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+                        ShowMessages("  ENCLS Advanced (bit 6)         = %s\n\n",
+                                     CPUID_EAX_SGX_ENCLS_ADVANCED(CpuidPacket->EAX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- EBX (MISCSELECT - Extended SGX Features) --\n\n");
+                        ShowMessages("  Miscselect = 0x%08X\n\n",
+                                     CPUID_EBX_MISCSELECT(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n",
+                                     CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX (Maximum Enclave Sizes) --\n\n");
+                        ShowMessages("  MaxEnclaveSizeNot64 = %u (2^%u = %llu bytes)\n",
+                                     CPUID_EDX_MAX_ENCLAVE_SIZE_NOT64(CpuidPacket->EDX),
+                                     CPUID_EDX_MAX_ENCLAVE_SIZE_NOT64(CpuidPacket->EDX),
+                                     (ULONG64)(1ULL << CPUID_EDX_MAX_ENCLAVE_SIZE_NOT64(CpuidPacket->EDX)));
+                        ShowMessages("  MaxEnclaveSize64     = %u (2^%u = %llu bytes)\n\n",
+                                     CPUID_EDX_MAX_ENCLAVE_SIZE_64(CpuidPacket->EDX),
+                                     CPUID_EDX_MAX_ENCLAVE_SIZE_64(CpuidPacket->EDX),
+                                     (ULONG64)(1ULL << CPUID_EDX_MAX_ENCLAVE_SIZE_64(CpuidPacket->EDX)));
+                    }
+
+                    else if (SubFunctionId == 1)
+                    {
+                        //
+                        // SGX attributes
+                        //
+                        ShowMessages("-- EAX (SECS.ATTRIBUTES[31:0]) --\n\n");
+                        ShowMessages("  ValidSecsAttributes0 = 0x%08X\n\n",
+                                     CPUID_EAX_VALID_SECS_ATTRIBUTES_0(CpuidPacket->EAX));
+
+                        ShowMessages("-- EBX (SECS.ATTRIBUTES[63:32]) --\n\n");
+                        ShowMessages("  ValidSecsAttributes1 = 0x%08X\n\n",
+                                     CPUID_EBX_VALID_SECS_ATTRIBUTES_1(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX (SECS.ATTRIBUTES[95:64]) --\n\n");
+                        ShowMessages("  ValidSecsAttributes2 = 0x%08X\n\n",
+                                     CPUID_ECX_VALID_SECS_ATTRIBUTES_2(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX (SECS.ATTRIBUTES[127:96]) --\n\n");
+                        ShowMessages("  ValidSecsAttributes3 = 0x%08X\n\n",
+                                     CPUID_EDX_VALID_SECS_ATTRIBUTES_3(CpuidPacket->EDX));
+                    }
+
+                    else
+                    {
+                        //
+                        // Subleaf 2+ (EPC sections)
+                        //
+                        if (CPUID_EAX_SUB_LEAF_TYPE(CpuidPacket->EAX) == 0)
+                        {
+                            //
+                            // Type 0: invalid subleaf
+                            //
+                            ShowMessages("-- EAX --\n\n");
+                            ShowMessages("  SubLeafType = %u (Invalid - no EPC section)\n",
+                                         CPUID_EAX_SUB_LEAF_TYPE(CpuidPacket->EAX));
+
+                            ShowMessages("\n-- EBX --\n");
+                            ShowMessages("  Zero = 0x%08X\n", CPUID_EBX_ZERO(CpuidPacket->EBX));
+
+                            ShowMessages("\n-- ECX --\n");
+                            ShowMessages("  Zero = 0x%08X\n", CPUID_ECX_ZERO(CpuidPacket->ECX));
+
+                            ShowMessages("\n-- EDX --\n");
+                            ShowMessages("  Zero = 0x%08X\n", CPUID_EDX_ZERO(CpuidPacket->EDX));
+                        }
+
+                        else if (CPUID_EAX_SUB_LEAF_TYPE(CpuidPacket->EAX) == 1)
+                        {
+                            //
+                            // Reconstruct base address from EAX and EBX
+                            //
+                            UINT64 BaseLow     = (UINT64)CPUID_EAX_EPC_BASE_PHYSICAL_ADDRESS_1(CpuidPacket->EAX);
+                            UINT64 BaseHigh    = (UINT64)CPUID_EBX_EPC_BASE_PHYSICAL_ADDRESS_2(CpuidPacket->EBX);
+                            UINT64 BaseAddress = (BaseHigh << 32) | (BaseLow << 12);
+
+                            //
+                            // Reconstruct size from ECX and EDX
+                            //
+                            UINT64 SizeLow   = (UINT64)CPUID_ECX_EPC_SIZE_1(CpuidPacket->ECX);
+                            UINT64 SizeHigh  = (UINT64)CPUID_EDX_EPC_SIZE_2(CpuidPacket->EDX);
+                            UINT64 SizeBytes = (SizeHigh << 32) | (SizeLow << 12);
+
+                            ShowMessages("-- EAX --\n\n");
+                            ShowMessages("  SubLeafType = %u (EPC Section)\n",
+                                         CPUID_EAX_SUB_LEAF_TYPE(CpuidPacket->EAX));
+                            ShowMessages("  EpcBasePhysicalAddress1 (bits 31:12) = 0x%05X\n\n",
+                                         CPUID_EAX_EPC_BASE_PHYSICAL_ADDRESS_1(CpuidPacket->EAX));
+
+                            ShowMessages("-- EBX --\n\n");
+                            ShowMessages("  EpcBasePhysicalAddress2 (bits 51:32) = 0x%05X\n\n",
+                                         CPUID_EBX_EPC_BASE_PHYSICAL_ADDRESS_2(CpuidPacket->EBX));
+
+                            ShowMessages("-- ECX --\n\n");
+                            ShowMessages("  EpcSectionProperty = %u",
+                                         CPUID_ECX_EPC_SECTION_PROPERTY(CpuidPacket->ECX));
+                            switch (CPUID_ECX_EPC_SECTION_PROPERTY(CpuidPacket->ECX))
+                            {
+                            case 0:
+                                ShowMessages(" (No confidentiality/integrity)\n\n");
+                                break;
+                            case 1:
+                                ShowMessages(" (Confidentiality and integrity protection)\n\n");
+                                break;
+                            default:
+                                ShowMessages(" (Reserved)\n\n");
+                                break;
+                            }
+                            ShowMessages("  EpcSize1 (bits 31:12) = 0x%05X\n\n",
+                                         CPUID_ECX_EPC_SIZE_1(CpuidPacket->ECX));
+
+                            ShowMessages("-- EDX --\n\n");
+                            ShowMessages("  EpcSize2 (bits 51:32) = 0x%05X\n\n",
+                                         CPUID_EDX_EPC_SIZE_2(CpuidPacket->EDX));
+
+                            ShowMessages("-- EPC Section Information --\n\n");
+                            ShowMessages("  Base Address = 0x%016llX\n", (ULONG64)BaseAddress);
+                            ShowMessages("  Size         = 0x%016llX bytes (%llu MB)\n\n",
+                                         (ULONG64)SizeBytes,
+                                         (ULONG64)(SizeBytes / (1024 * 1024)));
+                        }
+
+                        else
+                        {
+                            //
+                            // Unknown subleaf type (reserved)
+                            //
+                            ShowMessages("-- Raw Data for Sub-leaf %u (Type %u) --\n\n",
+                                         SubFunctionId,
+                                         CPUID_EAX_SUB_LEAF_TYPE(CpuidPacket->EAX));
+
+                            ShowMessages("  EAX = 0x%08X\n", CpuidPacket->EAX);
+                            ShowMessages("  EBX = 0x%08X\n", CpuidPacket->EBX);
+                            ShowMessages("  ECX = 0x%08X\n", CpuidPacket->ECX);
+                            ShowMessages("  EDX = 0x%08X\n\n", CpuidPacket->EDX);
+                            ShowMessages("  Note: Reserved sub-leaf type. Please refer to the latest Intel SDM.\n\n");
+                        }
+                    }
+
+                    break;
+                }
+
+                case 0x13:
+                    ShowMessages("==== CPUID.(EAX=13H) ====\n\n");
+                    ShowMessages("  This leaf is reserved (not implemented).\n\n");
+                    ShowMessages("  Raw data:\n");
+                    ShowMessages("  EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("  EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("  ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("  EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                    break;
+
+                case 0x14:
+                    ShowMessages("==== CPUID.(EAX=14H) Intel Processor Trace Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->LeafEaxMaxSubleaf);
+
+                    ShowMessages("==== CPUID.(EAX=14H, ECX=%u) Intel Processor Trace Information ====\n\n", SubFunctionId);
+
+                    if (SubFunctionId == 0)
+                    {
+                        //
+                        // main leaf
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  MaxSubLeaf = %u\n\n",
+                                     CPUID_EAX_MAX_SUB_LEAF(CpuidPacket->EAX));
+
+                        ShowMessages("-- EBX (Supported Features) --\n\n");
+                        ShowMessages("  CR3Filter support (bit 0)                    = %s\n",
+                                     CPUID_EBX_FLAG0(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Configurable PSB & Cycle-Accurate (bit 1)    = %s\n",
+                                     CPUID_EBX_FLAG1(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  IP Filtering & TraceStop (bit 2)             = %s\n",
+                                     CPUID_EBX_FLAG2(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  MTC & COFI suppression (bit 3)               = %s\n",
+                                     CPUID_EBX_FLAG3(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PTWRITE support (bit 4)                      = %s\n",
+                                     CPUID_EBX_FLAG4(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Power Event Trace (bit 5)                    = %s\n",
+                                     CPUID_EBX_FLAG5(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PSB/PMI preservation (bit 6)                 = %s\n",
+                                     CPUID_EBX_FLAG6(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Event Trace (bit 7)                          = %s\n",
+                                     CPUID_EBX_FLAG7(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Disable TNT (bit 8)                          = %s\n\n",
+                                     CPUID_EBX_FLAG8(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- ECX (Output Schemes) --\n\n");
+                        ShowMessages("  ToPA output scheme (bit 0)                   = %s\n",
+                                     CPUID_ECX_FLAG0(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  ToPA tables with any entries (bit 1)         = %s\n",
+                                     CPUID_ECX_FLAG1(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Single-Range Output scheme (bit 2)           = %s\n",
+                                     CPUID_ECX_FLAG2(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Trace Transport subsystem (bit 3)            = %s\n",
+                                     CPUID_ECX_FLAG3(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+                        ShowMessages("  LIP values include CS base (bit 31)          = %s\n\n",
+                                     CPUID_ECX_FLAG31(CpuidPacket->ECX) ? "TRUE" : "FALSE");
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n",
+                                     CPUID_EDX_RESERVED(CpuidPacket->EDX));
+                    }
+
+                    else if (SubFunctionId == 1)
+                    {
+                        //
+                        // Packet generation
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  NumberOfConfigurableAddressRangesForFiltering = %u\n",
+                                     CPUID_EAX_NUMBER_OF_CONFIGURABLE_ADDRESS_RANGES_FOR_FILTERING(CpuidPacket->EAX));
+                        ShowMessages("  BitmapOfSupportedMtcPeriodEncodings          = 0x%04X\n\n",
+                                     CPUID_EAX_BITMAP_OF_SUPPORTED_MTC_PERIOD_ENCODINGS(CpuidPacket->EAX));
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  BitmapOfSupportedCycleThresholdValueEncodings = 0x%04X\n",
+                                     CPUID_EBX_BITMAP_OF_SUPPORTED_CYCLE_THRESHOLD_VALUE_ENCODINGS(CpuidPacket->EBX));
+                        ShowMessages("  BitmapOfSupportedConfigurablePsbFrequencyEncodings = 0x%04X\n\n",
+                                     CPUID_EBX_BITMAP_OF_SUPPORTED_CONFIGURABLE_PSB_FREQUENCY_ENCODINGS(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n",
+                                     CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n",
+                                     CPUID_EDX_RESERVED(CpuidPacket->EDX));
+                    }
+
+                    else
+                    {
+                        //
+                        // Subleaves > 1 (if they exist)
+                        //
+                        ShowMessages("-- Raw Data for Sub-leaf %u --\n\n", SubFunctionId);
+                        ShowMessages("  EAX = 0x%08X\n", CpuidPacket->EAX);
+                        ShowMessages("  EBX = 0x%08X\n", CpuidPacket->EBX);
+                        ShowMessages("  ECX = 0x%08X\n", CpuidPacket->ECX);
+                        ShowMessages("  EDX = 0x%08X\n\n", CpuidPacket->EDX);
+                        ShowMessages("  Note: This sub-leaf may be for future Intel PT features.\n");
+                        ShowMessages("  Please refer to the latest Intel SDM for interpretation.\n\n");
+                    }
+
+                    break;
+
+                case 0x15:
+                {
+                    ShowMessages("==== CPUID.(EAX=15H) TSC and Core Crystal Clock Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 15h HAS NO SUBLEAVES             *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+                    //
+                    // EAX: Denominator
+                    //
+                    UINT32 Denominator = CPUID_EAX_DENOMINATOR(CpuidPacket->EAX);
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  Denominator = %u\n\n", Denominator);
+
+                    //
+                    // EBX: Numerator
+                    //
+                    UINT32 Numerator = CPUID_EBX_NUMERATOR(CpuidPacket->EBX);
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Numerator = %u\n\n", Numerator);
+
+                    //
+                    // ECX: Nominal frequency (if available)
+                    //
+                    UINT32 NominalFreq = CPUID_ECX_NOMINAL_FREQUENCY(CpuidPacket->ECX);
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  NominalFrequency = %u Hz", NominalFreq);
+                    if (NominalFreq > 0)
+                    {
+                        ShowMessages(" (%u MHz, %u GHz)\n",
+                                     NominalFreq / 1000000,
+                                     NominalFreq / 1000000000);
+                    }
+                    else
+                    {
+                        ShowMessages("  (not enumerated)\n\n");
+                    }
+
+                    //
+                    // EDX: reserved
+                    //
+                    ShowMessages("\n-- EDX --\n");
+                    ShowMessages("  Reserved = 0x%08X\n",
+                                 CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    //
+                    // Calculate and display TSC frequency if possible
+                    //
+                    ShowMessages("-- TSC Frequency Information --\n\n");
+
+                    if (Denominator == 0 || Numerator == 0)
+                    {
+                        ShowMessages("  TSC ratio not enumerated (denominator or numerator is 0)\n\n");
+                    }
+
+                    else
+                    {
+                        ShowMessages("  TSC / Core Crystal Clock ratio = %u / %u\n",
+                                     Numerator,
+                                     Denominator);
+                        ShowMessages("  TSC frequency = Core Crystal Clock * (%u/%u)\n",
+                                     Numerator,
+                                     Denominator);
+                        if (NominalFreq > 0)
+                        {
+                            UINT64 TSCFreqHz = (UINT64)NominalFreq * Numerator / Denominator;
+                            ShowMessages("  TSC frequency = %llu Hz (%llu MHz, %llu GHz)\n\n",
+                                         (ULONG64)TSCFreqHz,
+                                         (ULONG64)(TSCFreqHz / 1000000),
+                                         (ULONG64)(TSCFreqHz / 1000000000));
+                        }
+                        else
+                        {
+                            ShowMessages("  TSC frequency cannot be calculated (nominal frequency not enumerated)\n\n");
+                        }
+                    }
+
+                    break;
+                }
+
+                case 0x16:
+                {
+                    ShowMessages("==== CPUID.(EAX=16H) Processor Frequency Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *               LEAF 16h HAS NO SUBLEAVES             *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    //
+                    // EAX: Processor base frequency
+                    //
+                    UINT32 BaseFreq = CPUID_EAX_PROCESOR_BASE_FREQUENCY_MHZ(CpuidPacket->EAX);
+                    ShowMessages("-- EAX --\n\n");
+                    if (BaseFreq == 0)
+                    {
+                        ShowMessages("  ProcessorBaseFrequencyMhz = 0 (not supported)\n\n");
+                    }
+                    else
+                    {
+                        ShowMessages("  ProcessorBaseFrequencyMhz = %u MHz\n", BaseFreq);
+                    }
+
+                    //
+                    // EBX: Maximum frequency
+                    //
+                    UINT32 MaxFreq = CPUID_EBX_PROCESSOR_MAXIMUM_FREQUENCY_MHZ(CpuidPacket->EBX);
+                    ShowMessages("-- EBX --\n\n");
+                    if (MaxFreq == 0)
+                    {
+                        ShowMessages("  ProcessorMaximumFrequencyMhz = 0 (not supported)\n\n");
+                    }
+                    else
+                    {
+                        ShowMessages("  ProcessorMaximumFrequencyMhz = %u MHz\n", MaxFreq);
+                    }
+
+                    //
+                    // ECX: Bus (reference) frequency
+                    //
+                    UINT32 BusFreq = CPUID_ECX_BUS_FREQUENCY_MHZ(CpuidPacket->ECX);
+                    ShowMessages("-- ECX --\n\n");
+                    if (BusFreq == 0)
+                    {
+                        ShowMessages("  BusFrequencyMhz = 0 (not supported)\n\n");
+                    }
+                    else
+                    {
+                        ShowMessages("  BusFrequencyMhz = %u MHz\n\n", BusFreq);
+                    }
+
+                    //
+                    // EDX: reserved
+                    //
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n",
+                                 CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    //
+                    // Display summary
+                    //
+                    ShowMessages("-- Frequency Summary --\n\n");
+                    ShowMessages("  Base Frequency:     ");
+                    if (BaseFreq == 0)
+                    {
+                        ShowMessages("Not Supported\n");
+                    }
+                    else
+                    {
+                        ShowMessages("%u MHz\n", BaseFreq);
+                    }
+
+                    //
+                    // Maximum frequency
+                    //
+                    ShowMessages("  Maximum Frequency:  ");
+                    if (MaxFreq == 0)
+                    {
+                        ShowMessages("Not Supported\n");
+                    }
+                    else
+                    {
+                        ShowMessages("%u MHz\n", MaxFreq);
+                    }
+
+                    //
+                    // Bus frequency
+                    //
+                    ShowMessages("  Bus Frequency:      ");
+                    if (BusFreq == 0)
+                    {
+                        ShowMessages("Not Supported\n");
+                    }
+                    else
+                    {
+                        ShowMessages("%u MHz\n\n", BusFreq);
+                    }
+
+                    //
+                    // Show turbo boost if both base and max are supported and max > base
+                    //
+                    if (BaseFreq > 0 && MaxFreq > 0 && MaxFreq > BaseFreq)
+                    {
+                        UINT32 TurboBoost   = MaxFreq - BaseFreq;
+                        FLOAT  TurboPercent = ((FLOAT)TurboBoost / BaseFreq) * 100.0f;
+                        ShowMessages("  Turbo Boost:        %u MHz above base (%.1f%% increase)\n\n",
+                                     TurboBoost,
+                                     TurboPercent);
+                    }
+
+                    ShowMessages("  *******************************************************\n");
+                    ShowMessages("  *  NOTE: These values are for display purposes only   *\n");
+                    ShowMessages("  *  They do not reflect actual running frequencies     *\n");
+                    ShowMessages("  *  Actual frequencies depend on workload, power, etc. *\n");
+                    ShowMessages("  *******************************************************\n\n");
+
+                    break;
+                }
+
+                case 0x17:
+                {
+                    ShowMessages("==== CPUID.(EAX=17H) SoC Vendor Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CPUID_EAX_MAX_SOC_ID_INDEX(CpuidPacket->EAX));
+
+                    ShowMessages("==== CPUID.(EAX=17H, ECX=%u) SoC Vendor Information ====\n\n", SubFunctionId);
+
+                    if (SubFunctionId == 0)
+                    {
+                        //
+                        // Main
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  MaxSocIdIndex = %u\n\n", CPUID_EAX_MAX_SOC_ID_INDEX(CpuidPacket->EAX));
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  SocVendorId = 0x%04X\n",
+                                     CPUID_EBX_SOC_VENDOR_ID(CpuidPacket->EBX));
+                        ShowMessages("  IsVendorScheme = %s\n\n",
+                                     CPUID_EBX_IS_VENDOR_SCHEME(CpuidPacket->EBX) ? "TRUE (Industry Standard)" : "FALSE (Intel Assigned)");
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  ProjectId = 0x%08X\n\n",
+                                     CPUID_ECX_PROJECT_ID(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  SteppingId = 0x%08X\n\n",
+                                     CPUID_EDX_STEPPING_ID(CpuidPacket->EDX));
+                    }
+
+                    else if (SubFunctionId >= 1 && SubFunctionId <= 3)
+                    {
+                        //
+                        // subleaves 1-3 (brand string)
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  SocVendorBrandString[0..3] = 0x%08X (%c%c%c%c)\n\n",
+                                     CPUID_EAX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EAX),
+                                     (CPUID_EAX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EAX) >> 0) & 0xFF,
+                                     (CPUID_EAX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EAX) >> 8) & 0xFF,
+                                     (CPUID_EAX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EAX) >> 16) & 0xFF,
+                                     (CPUID_EAX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EAX) >> 24) & 0xFF);
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  SocVendorBrandString[4..7] = 0x%08X (%c%c%c%c)\n\n",
+                                     CPUID_EBX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EBX),
+                                     (CPUID_EBX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EBX) >> 0) & 0xFF,
+                                     (CPUID_EBX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EBX) >> 8) & 0xFF,
+                                     (CPUID_EBX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EBX) >> 16) & 0xFF,
+                                     (CPUID_EBX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EBX) >> 24) & 0xFF);
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  SocVendorBrandString[8..11] = 0x%08X (%c%c%c%c)\n\n",
+                                     CPUID_ECX_SOC_VENDOR_BRAND_STRING(CpuidPacket->ECX),
+                                     (CPUID_ECX_SOC_VENDOR_BRAND_STRING(CpuidPacket->ECX) >> 0) & 0xFF,
+                                     (CPUID_ECX_SOC_VENDOR_BRAND_STRING(CpuidPacket->ECX) >> 8) & 0xFF,
+                                     (CPUID_ECX_SOC_VENDOR_BRAND_STRING(CpuidPacket->ECX) >> 16) & 0xFF,
+                                     (CPUID_ECX_SOC_VENDOR_BRAND_STRING(CpuidPacket->ECX) >> 24) & 0xFF);
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  SocVendorBrandString[12..15] = 0x%08X (%c%c%c%c)\n\n",
+                                     CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EDX),
+                                     (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EDX) >> 0) & 0xFF,
+                                     (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EDX) >> 8) & 0xFF,
+                                     (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EDX) >> 16) & 0xFF,
+                                     (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidPacket->EDX) >> 24) & 0xFF);
+                    }
+
+                    else
+                    {
+                        //
+                        // Sub-leaves > MaxSOCID_Index (Reserved, should return all zeros)
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                        ShowMessages("-- EDX --\n\n");
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+                    }
+                    break;
+                }
+
+                case 0x18:
+                    //
+                    // DAT, 0x18 = 24 (decimal)
+                    //
+                    ShowMessages("==== CPUID.(EAX=18H) Deterministic Address Translation Parameters ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *             Max NumberOfSubLeaves = %u               *\n"
+                                 "  *******************************************************\n\n",
+                                 CpuidPacket->LeafEaxMaxSubleaf);
+
+                    ShowMessages("==== CPUID.(EAX=18H, ECX=%u) Deterministic Address Translation Parameters ====\n\n", SubFunctionId);
+
+                    if (SubFunctionId == 0)
+                    {
+                        //
+                        // main
+                        //
+                        ShowMessages("-- EAX --\n\n");
+                        ShowMessages("  MaxSubLeaf = %u\n\n", CPUID_EAX_MAX_SUB_LEAF(CpuidPacket->EAX));
+
+                        //
+                        // EBX: Page size support and associativity
+                        //
+                        ShowMessages("-- EBX --\n\n");
+                        ShowMessages("  PageEntries4KbSupported    = %s\n",
+                                     CPUID_EBX_PAGE_ENTRIES_4KB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PageEntries2MbSupported    = %s\n",
+                                     CPUID_EBX_PAGE_ENTRIES_2MB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PageEntries4MbSupported    = %s\n",
+                                     CPUID_EBX_PAGE_ENTRIES_4MB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  PageEntries1GbSupported    = %s\n",
+                                     CPUID_EBX_PAGE_ENTRIES_1GB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                        ShowMessages("  Partitioning               = %u%s\n",
+                                     CPUID_EBX_PARTITIONING(CpuidPacket->EBX),
+                                     CPUID_EBX_PARTITIONING(CpuidPacket->EBX) == 0 ? " (soft partitioning)" : "");
+                        ShowMessages("  WaysOfAssociativity (W)    = %u\n\n",
+                                     CPUID_EBX_WAYS_OF_ASSOCIATIVITY_00(CpuidPacket->EBX));
+
+                        //
+                        // ECX: Number of Sets
+                        //
+                        ShowMessages("-- ECX --\n\n");
+                        ShowMessages("  NumberOfSets               = %u\n\n",
+                                     CPUID_ECX_NUMBER_OF_SETS(CpuidPacket->ECX));
+
+                        //
+                        // EDX: Translation cache type and properties
+                        //
+                        ShowMessages("-- EDX --\n\n");
+
+                        switch (CPUID_EDX_TRANSLATION_CACHE_TYPE_FIELD(CpuidPacket->EDX))
+                        {
+                        case 0:
+                            TypeName = "Null (sub-leaf not valid)";
+                            break;
+                        case 1:
+                            TypeName = "Data TLB";
+                            break;
+                        case 2:
+                            TypeName = "Instruction TLB";
+                            break;
+                        case 3:
+                            TypeName = "Unified TLB";
+                            break;
+                        default:
+                            TypeName = "Reserved";
+                            break;
+                        }
+                        ShowMessages("  TranslationCacheTypeField  = %u (%s)\n",
+                                     CPUID_EDX_TRANSLATION_CACHE_TYPE_FIELD(CpuidPacket->EDX),
+                                     TypeName);
+                        ShowMessages("  TranslationCacheLevel      = %u\n",
+                                     CPUID_EDX_TRANSLATION_CACHE_LEVEL(CpuidPacket->EDX));
+                        ShowMessages("  FullyAssociativeStructure  = %s%s\n",
+                                     CPUID_EDX_FULLY_ASSOCIATIVE_STRUCTURE(CpuidPacket->EDX) ? "TRUE" : "FALSE",
+                                     CPUID_EDX_FULLY_ASSOCIATIVE_STRUCTURE(CpuidPacket->EDX) ? " (fully associative)" : "");
+
+                        ShowMessages("  MaxAddressableIdsForLogicalProcessors (raw) = %u -> actual = %u (raw + 1)\n",
+                                     CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidPacket->EDX),
+                                     CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidPacket->EDX) + 1);
+                    }
+
+                    else
+                    {
+                        //
+                        // subleaves >= 1 (Translation Structure Information)
+                        //
+
+                        //
+                        // Check if this sub-leaf is valid (EDX[4:0] != 0)
+                        //
+                        if (CPUID_EDX_TRANSLATION_CACHE_TYPE_FIELD(CpuidPacket->EDX) == 0)
+                        {
+                            ShowMessages("  Sub-leaf %u is invalid (TranslationCacheTypeField = 0)\n", SubFunctionId);
+                            ShowMessages("  All registers should be zero according to spec:\n");
+                            ShowMessages("  EAX = 0x%08X\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+                            ShowMessages("  EBX = 0x%08X\n", CpuidPacket->EBX);
+                            ShowMessages("  ECX = 0x%08X\n", CpuidPacket->ECX);
+                            ShowMessages("  EDX = 0x%08X\n", CpuidPacket->EDX);
+                        }
+
+                        else
+                        {
+                            //
+                            // EAX: Reserved for sub-leaves >= 1
+                            //
+                            ShowMessages("-- EAX --\n\n");
+                            ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+
+                            //
+                            // EBX: Page size support and associativity
+                            //
+                            ShowMessages("-- EBX --\n\n");
+                            ShowMessages("  PageEntries4KbSupported    = %s\n",
+                                         CPUID_EBX_PAGE_ENTRIES_4KB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                            ShowMessages("  PageEntries2MbSupported    = %s\n",
+                                         CPUID_EBX_PAGE_ENTRIES_2MB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                            ShowMessages("  PageEntries4MbSupported    = %s\n",
+                                         CPUID_EBX_PAGE_ENTRIES_4MB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                            ShowMessages("  PageEntries1GbSupported    = %s\n",
+                                         CPUID_EBX_PAGE_ENTRIES_1GB_SUPPORTED(CpuidPacket->EBX) ? "TRUE" : "FALSE");
+                            ShowMessages("  Partitioning               = %u%s\n",
+                                         CPUID_EBX_PARTITIONING(CpuidPacket->EBX),
+                                         CPUID_EBX_PARTITIONING(CpuidPacket->EBX) == 0 ? " (soft partitioning)" : "");
+                            ShowMessages("  WaysOfAssociativity (W)    = %u\n\n",
+                                         CPUID_EBX_WAYS_OF_ASSOCIATIVITY_01(CpuidPacket->EBX));
+
+                            // ECX: Number of Sets
+                            ShowMessages("-- ECX --\n\n");
+                            ShowMessages("  NumberOfSets               = %u\n\n",
+                                         CPUID_ECX_NUMBER_OF_SETS(CpuidPacket->ECX));
+
+                            // EDX: Translation cache type and properties
+                            ShowMessages("-- EDX --\n\n");
+                            switch (CPUID_EDX_TRANSLATION_CACHE_TYPE_FIELD(CpuidPacket->EDX))
+                            {
+                            case 0:
+                                TypeName = "Null (sub-leaf not valid)";
+                                break;
+                            case 1:
+                                TypeName = "Data TLB";
+                                break;
+                            case 2:
+                                TypeName = "Instruction TLB";
+                                break;
+                            case 3:
+                                TypeName = "Unified TLB";
+                                break;
+                            default:
+                                TypeName = "Reserved";
+                                break;
+                            }
+                            ShowMessages("  TranslationCacheTypeField  = %u (%s)\n",
+                                         CPUID_EDX_TRANSLATION_CACHE_TYPE_FIELD(CpuidPacket->EDX),
+                                         TypeName);
+                            ShowMessages("  TranslationCacheLevel      = %u\n",
+                                         CPUID_EDX_TRANSLATION_CACHE_LEVEL(CpuidPacket->EDX));
+                            ShowMessages("  FullyAssociativeStructure  = %s%s\n",
+                                         CPUID_EDX_FULLY_ASSOCIATIVE_STRUCTURE(CpuidPacket->EDX) ? "TRUE" : "FALSE",
+                                         CPUID_EDX_FULLY_ASSOCIATIVE_STRUCTURE(CpuidPacket->EDX) ? " (fully associative)" : "");
+
+                            ShowMessages("  MaxAddressableIdsForLogicalProcessors (raw) = %u -> actual = %u (raw + 1)\n",
+                                         CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidPacket->EDX),
+                                         CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidPacket->EDX) + 1);
+                        }
+                    }
+
+                    break;
+
+                case 0x80000000:
+                    ShowMessages("==== CPUID.(EAX=80000000H) Extended Function Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *           LEAF 0x80000000 HAS NO SUBLEAVES          *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  MaxExtendedFunctions = 0x%08X (%u)\n\n",
+                                 CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidPacket->EAX),
+                                 CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidPacket->EAX));
+
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    break;
+
+                case 0x80000001:
+                    ShowMessages("==== CPUID.(EAX=80000001H) Extended CPU Signature ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *           LEAF 0x80000001 HAS NO SUBLEAVES          *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  LAHF/SAHF Available in 64-bit Mode = %s\n",
+                                 CPUID_ECX_LAHF_SAHF_AVAILABLE_IN_64_BIT_MODE(CpuidPacket->ECX) ? "True" : "False");
+                    ShowMessages("  LZCNT                              = %s\n",
+                                 CPUID_ECX_LZCNT(CpuidPacket->ECX) ? "True" : "False");
+                    ShowMessages("  PREFETCHW                          = %s\n\n",
+                                 CPUID_ECX_PREFETCHW(CpuidPacket->ECX) ? "True" : "False");
+
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  SYSCALL/SYSRET Available in 64-bit Mode = %s\n",
+                                 CPUID_EDX_SYSCALL_SYSRET_AVAILABLE_IN_64_BIT_MODE(CpuidPacket->EDX) ? "True" : "False");
+                    ShowMessages("  Execute Disable Bit Available            = %s\n",
+                                 CPUID_EDX_EXECUTE_DISABLE_BIT_AVAILABLE(CpuidPacket->EDX) ? "True" : "False");
+                    ShowMessages("  1-GByte Pages Available                 = %s\n",
+                                 CPUID_EDX_PAGES_1GB_AVAILABLE(CpuidPacket->EDX) ? "True" : "False");
+                    ShowMessages("  RDTSCP Available                        = %s\n",
+                                 CPUID_EDX_RDTSCP_AVAILABLE(CpuidPacket->EDX) ? "True" : "False");
+                    ShowMessages("  Intel 64 Architecture Available         = %s\n\n",
+                                 CPUID_EDX_IA64_AVAILABLE(CpuidPacket->EDX) ? "True" : "False");
+
+                    break;
+                //
+                // 0x80000002-0x80000004 - Processor brand string
+                //
+                case 0x80000002:
+                case 0x80000003:
+                case 0x80000004:
+                {
+                    ShowMessages("==== CPUID.(EAX=80000002H-80000004H) Processor Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *         LEAF 0x80000002-4 HAS NO SUBLEAVES          *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+                    ShowMessages("  Brand String = \"%s\"\n\n", CpuidPacket->BrandString);
+
+                    break;
+                }
+                case 0x80000005:
+                    ShowMessages("EAX = 0x80000005: not implemented.\n");
+                    break;
+
+                case 0x80000006:
+                {
+                    ShowMessages("==== CPUID.(EAX=80000006H) Extended Cache Information ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *          LEAF 0x80000006 HAS NO SUBLEAVES           *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                    ShowMessages("-- ECX (L2 Cache Information) --\n");
+
+                    UINT32 LineSize  = CPUID_ECX_CACHE_LINE_SIZE_IN_BYTES(CpuidPacket->ECX);
+                    UINT32 Assoc     = CPUID_ECX_L2_ASSOCIATIVITY_FIELD(CpuidPacket->ECX);
+                    UINT32 CacheSize = CPUID_ECX_CACHE_SIZE_IN_1K_UNITS(CpuidPacket->ECX);
+
+                    //
+                    // decode associativity
+                    //
+                    switch (Assoc)
+                    {
+                    case 0x00:
+                        AssocName = "Disabled";
+                        break;
+                    case 0x01:
+                        AssocName = "Direct mapped";
+                        break;
+                    case 0x02:
+                        AssocName = "2-way";
+                        break;
+                    case 0x04:
+                        AssocName = "4-way";
+                        break;
+                    case 0x06:
+                        AssocName = "8-way";
+                        break;
+                    case 0x08:
+                        AssocName = "16-way";
+                        break;
+                    case 0x0F:
+                        AssocName = "Fully associative";
+                        break;
+                    default:
+                        AssocName = "Reserved";
+                        break;
+                    }
+                    ShowMessages("  CacheLineSizeInBytes       = %u bytes\n", LineSize);
+                    ShowMessages("  L2AssociativityField       = 0x%02X (%s)\n", Assoc, AssocName);
+                    ShowMessages("  CacheSizeIn1KUnits         = %u KB (%u MB)\n",
+                                 CacheSize,
+                                 CacheSize / 1024);
+
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    break;
+                }
+
+                case 0x80000007:
+                    ShowMessages("==== CPUID.(EAX=80000007H) Extended Time Stamp Counter ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *          LEAF 0x80000007 HAS NO SUBLEAVES           *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidPacket->EAX));
+
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  InvariantTscAvailable = %u%s\n\n",
+                                 CPUID_EDX_INVARIANT_TSC_AVAILABLE(CpuidPacket->EDX),
+                                 CPUID_EDX_INVARIANT_TSC_AVAILABLE(CpuidPacket->EDX) ? " (TSC runs at constant rate)" : "");
+
+                    break;
+
+                case 0x80000008:
+                {
+                    ShowMessages("==== CPUID.(EAX=80000008H) Virtual & Physical Address Sizes ====\n\n");
+                    ShowMessages("  *******************************************************\n"
+                                 "  *          LEAF 0x80000008 HAS NO SUBLEAVES           *\n"
+                                 "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                                 "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                                 "  *******************************************************\n\n");
+
+                    ShowMessages("-- EAX --\n\n");
+                    UINT32 PhysicalBits = CPUID_EAX_NUMBER_OF_PHYSICAL_ADDRESS_BITS(CpuidPacket->EAX);
+                    UINT32 LinearBits   = CPUID_EAX_NUMBER_OF_LINEAR_ADDRESS_BITS(CpuidPacket->EAX);
+
+                    ShowMessages("  NumberOfPhysicalAddressBits = %u (max physical address = 2^%u = %llu bytes)\n",
+                                 PhysicalBits,
+                                 PhysicalBits,
+                                 (ULONG64)(1ULL << PhysicalBits));
+                    ShowMessages("  NumberOfLinearAddressBits  = %u (max linear address = 2^%u = %llu bytes)\n",
+                                 LinearBits,
+                                 LinearBits,
+                                 (ULONG64)(1ULL << LinearBits));
+
+                    ShowMessages("-- EBX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidPacket->EBX));
+
+                    ShowMessages("-- ECX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_ECX_RESERVED(CpuidPacket->ECX));
+
+                    ShowMessages("-- EDX --\n\n");
+                    ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidPacket->EDX));
+
+                    break;
+                }
+
+                default:
+                    ShowMessages("==== CPUID.(EAX=%08XH) ====\n\n", FunctionId);
+                    ShowMessages("  CPUID leaf 0x%08X is not implemented in HyperDbg.\n", FunctionId);
+                    ShowMessages("  You can decode the raw values yourself:\n");
+                    ShowMessages("    EAX: 0x%08X\n", CpuidPacket->EAX);
+                    ShowMessages("    EBX: 0x%08X\n", CpuidPacket->EBX);
+                    ShowMessages("    ECX: 0x%08X\n", CpuidPacket->ECX);
+                    ShowMessages("    EDX: 0x%08X\n\n", CpuidPacket->EDX);
+                }
+            }
+            else
+            {
+                ShowErrorMessage(CpuidPacket->KernelStatus);
+            }
+
+            //
+            // Signal the event relating to receiving result of CPUID
+            //
+            DbgReceivedKernelResponse(DEBUGGER_SYNCRONIZATION_OBJECT_KERNEL_DEBUGGER_USER_CPUID_RESULT);
 
             break;
 
