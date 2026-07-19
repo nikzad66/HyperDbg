@@ -650,6 +650,7 @@ SetPrivilege(HANDLE  Token,          // access token handle
              BOOL    EnablePrivilege // to enable or disable privilege
 )
 {
+#ifdef _WIN32
     TOKEN_PRIVILEGES Tp;
     LUID             Luid;
 
@@ -685,6 +686,16 @@ SetPrivilege(HANDLE  Token,          // access token handle
     }
 
     return TRUE;
+#else
+    //
+    // TODO(Linux): no Windows access-token/privilege model. This helper has no
+    // Linux callers today; wire to capabilities (e.g. CAP_SYS_ADMIN) if needed.
+    //
+    UNREFERENCED_PARAMETER(Token);
+    UNREFERENCED_PARAMETER(Privilege);
+    UNREFERENCED_PARAMETER(EnablePrivilege);
+    return FALSE;
+#endif
 }
 
 /**
@@ -757,8 +768,17 @@ IsFileExistA(const CHAR * FileName)
 BOOLEAN
 IsFileExistW(const WCHAR * FileName)
 {
+#ifdef _WIN32
     struct _stat64i32 buffer;
     return (_wstat(FileName, &buffer) == 0);
+#else
+    //
+    // TODO(Linux): blocked on the wide-char (2-byte WCHAR -> UTF-8) conversion
+    // work; once available, convert FileName and delegate to IsFileExistA.
+    //
+    UNREFERENCED_PARAMETER(FileName);
+    return FALSE;
+#endif
 }
 
 /**
@@ -796,6 +816,7 @@ IsEmptyString(CHAR * Text)
 VOID
 GetConfigFilePath(PWCHAR ConfigPath)
 {
+#ifdef _WIN32
     WCHAR CurrentPath[MAX_PATH] = {0};
 
     //
@@ -812,6 +833,17 @@ GetConfigFilePath(PWCHAR ConfigPath)
     // Combine current exe path with config file name
     //
     PathCombineW(ConfigPath, CurrentPath, CONFIG_FILE_NAME);
+#else
+    //
+    // TODO(Linux): resolve the executable's directory via readlink("/proc/self/exe")
+    // and append CONFIG_FILE_NAME. Blocked on the wide-char (2-byte WCHAR) work
+    // since ConfigPath is a PWCHAR. For now leave the path empty.
+    //
+    if (ConfigPath != NULL)
+    {
+        ConfigPath[0] = 0;
+    }
+#endif
 }
 
 /**
@@ -824,6 +856,7 @@ GetConfigFilePath(PWCHAR ConfigPath)
 std::vector<std::string>
 ListDirectory(const std::string & Directory, const std::string & Extension)
 {
+#ifdef _WIN32
     WIN32_FIND_DATAA         FindData;
     HANDLE                   Find     = INVALID_HANDLE_VALUE;
     std::string              FullPath = Directory + "\\" + Extension;
@@ -842,6 +875,15 @@ ListDirectory(const std::string & Directory, const std::string & Extension)
     FindClose(Find);
 
     return DirList;
+#else
+    //
+    // TODO(Linux): reimplement with opendir/readdir + fnmatch(Extension) over
+    // Directory. Only caller today is the script-engine test harness (eval.cpp).
+    //
+    UNREFERENCED_PARAMETER(Directory);
+    UNREFERENCED_PARAMETER(Extension);
+    return std::vector<std::string>();
+#endif
 }
 
 /**
