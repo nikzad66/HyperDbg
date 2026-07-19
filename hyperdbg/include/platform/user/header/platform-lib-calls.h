@@ -65,6 +65,15 @@ INT
 PlatformStrCpy(char * Dest, SIZE_T DestSize, const char * Src);
 
 //
+// CASE-INSENSITIVE STRING COMPARE
+//
+// Mirrors _stricmp: returns 0 when the strings are equal ignoring case, and a
+// negative/positive value otherwise. Linux uses strcasecmp (same semantics).
+//
+INT
+PlatformStrCaseCmp(const char * Str1, const char * Str2);
+
+//
 // SLEEP (milliseconds)
 //
 VOID

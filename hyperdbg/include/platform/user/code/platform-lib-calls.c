@@ -19,6 +19,7 @@
 #    include <errno.h>
 #    include <stdint.h>
 #    include <string.h>
+#    include <strings.h>
 #    include <signal.h>
 #endif // defined(__linux__)
 
@@ -226,6 +227,29 @@ PlatformStrCpy(char * Dest, SIZE_T DestSize, const char * Src)
 
     memcpy(Dest, Src, Length + 1);
     return 0;
+#else
+#    error "Unsupported platform"
+#endif
+}
+
+/**
+ * @brief Platform independent wrapper for _stricmp
+ *
+ * @details Compares two strings ignoring case. Returns 0 when equal; a value
+ * less/greater than zero otherwise. Linux uses strcasecmp, which has the same
+ * semantics as the Win32 CRT's _stricmp.
+ *
+ * @param Str1 first string
+ * @param Str2 second string
+ * @return INT 0 if equal (case-insensitively), non-zero otherwise
+ */
+INT
+PlatformStrCaseCmp(const char * Str1, const char * Str2)
+{
+#if defined(_WIN32)
+    return _stricmp(Str1, Str2);
+#elif defined(__linux__)
+    return strcasecmp(Str1, Str2);
 #else
 #    error "Unsupported platform"
 #endif

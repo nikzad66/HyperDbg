@@ -11,6 +11,11 @@
  */
 #include "pch.h"
 
+#ifdef __linux__
+#    include <sys/stat.h> // struct stat / stat() for IsFileExistA
+#    include <immintrin.h> // Intel TSX RTM intrinsics (_xbegin/_xend); requires -mrtm
+#endif
+
 //
 // Global Variables
 //
@@ -510,7 +515,7 @@ CompareLowerCaseStrings(CommandToken TargetToken, const CHAR * StringToCompare)
     //
     // Convert the token value to 64 bit unsigned integer
     //
-    return _stricmp(TargetTokenValue.c_str(), StringToCompare) == 0;
+    return PlatformStrCaseCmp(TargetTokenValue.c_str(), StringToCompare) == 0;
 }
 
 /**
@@ -920,7 +925,7 @@ ConvertStringVectorToCharPointerArray(const std::string & s)
 VOID
 CommonCpuidInstruction(UINT32 Func, UINT32 SubFunc, INT * CpuInfo)
 {
-    CpuIdEx(CpuInfo, Func, SubFunc);
+    CpuCpuIdEx(CpuInfo, Func, SubFunc);
 }
 
 /**
