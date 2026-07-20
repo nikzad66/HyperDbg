@@ -123,6 +123,32 @@ equivalent, behavior-preserving.
   wait/read via `PlatformSerial*`, `DebugBreak`→`PlatformDebugBreak`.
 - `readmem.cpp` — `ZeroMemory` / `DeviceIoControl` / `GetLastError` sweep.
 
+### common
+- `common.cpp` — multi-category port:
+  - `_stricmp`→`PlatformStrCaseCmp` (new wrapper, see platform-lib-calls).
+  - `CpuIdEx`→`CpuCpuIdEx`. **This also fixes an upstream typo, not just a Linux
+    shim.** Commit `85843494` ("add CPU intrinsics for user mode") swept the MSVC
+    intrinsics onto the new `Cpu*` wrappers but wrote `CpuIdEx` where the wrapper is
+    actually named `CpuCpuIdEx` (cf. `__cpuid`→`CpuCpuId` done correctly alongside).
+    `CpuIdEx` is defined **nowhere** in the tree, so this line does not compile on
+    Windows either — it was just never rebuilt there. Same bug also hit
+    `cpu.cpp:148` / `cpu.cpp:200` — **now fixed there too** (user-confirmed the swap);
+    still present on `master`.
+  - `IsFileExistA` — kept as-is (POSIX `struct stat`/`stat()`); added `#include
+    <sys/stat.h>` under `__linux__`.
+  - Whole Windows-only bodies guarded `#ifdef _WIN32` with a Linux stub + TODO:
+    `SetPrivilege` (token/LUID; no Linux callers → returns FALSE),
+    `IsFileExistW` (`_wstat`; wide-char deferred → FALSE),
+    `GetConfigFilePath` (`GetModuleFileNameW`/shlwapi; wide-char deferred → empties path),
+    `ListDirectory` (`FindFirstFileA`; → empty vector, only caller is eval.cpp test harness).
+  - `CheckAddressValidityUsingTsx` — TSX `_xbegin`/`_xend`/`_XBEGIN_STARTED` kept
+    verbatim; they resolve on GCC via `<immintrin.h>` (included under `__linux__`)
+    once `-mrtm` is set. Added `target_compile_options(libhyperdbg PRIVATE -mrtm)`
+    in `libhyperdbg/CMakeLists.txt` (UNIX block). Real 1:1 mapping, not a stub — the
+    path is gated by `g_RtmSupport`, which is live on Linux now that cpuid works.
+- `platform-lib-calls.{h,c}` — added `PlatformStrCaseCmp(Str1, Str2)`: Windows
+  `_stricmp`; Linux `strcasecmp` (added `<strings.h>` to the Linux includes).
+
 ### Core debugger
 - `debugger.cpp` — `DeviceIoControl` / `GetLastError` / `RtlZeroMemory` sweep;
   `DebuggerGetNtoskrnlBase` body guarded `#ifdef _WIN32` (Linux returns NULL).
@@ -259,6 +285,14 @@ backend, and the Toolhelp thread-enumeration equivalent (`/proc`) — all stubbe
 - [ ] `$peb` pseudo-register — returns 0 on Linux (PEB is NT-only).
 - [ ] `DebuggerGetNtoskrnlBase` — returns NULL on Linux (NT system-module enum).
 - [ ] File I/O / user-debugger paths — stubbed (also blocked on wide-char above).
+- [ ] `common.cpp::ListDirectory` — Linux returns empty vector; reimplement with
+  `opendir`/`readdir` + `fnmatch` (only caller today is eval.cpp's test harness).
+- [ ] `common.cpp::GetConfigFilePath` — Linux empties the path; resolve via
+  `readlink("/proc/self/exe")` + append `CONFIG_FILE_NAME` (also blocked on wide-char).
+- [ ] `common.cpp::SetPrivilege` / `IsFileExistW` — Linux stubs (no callers /
+  wide-char deferred respectively).
+- [x] `cpu.cpp:148` & `cpu.cpp:200` — same `CpuIdEx`→`CpuCpuIdEx` typo fix as
+  common.cpp. Done.
 
 ### Build system
 - [ ] Add `.gitignore` rules for the in-source CMake build output
