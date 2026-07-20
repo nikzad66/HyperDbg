@@ -1131,6 +1131,11 @@ GetTerminalId(PSCRIPT_ENGINE_TOKEN Token)
             if (!strcmp("_hex", TerminalMap[i]))
                 return i;
         }
+        else if (Token->Type == FLOAT_LITERAL)
+        {
+            if (!strcmp("_float", TerminalMap[i]))
+                return i;
+        }
         else if (Token->Type == GLOBAL_ID || Token->Type == GLOBAL_UNRESOLVED_ID)
         {
             if (!strcmp("_global_id", TerminalMap[i]))
@@ -1255,6 +1260,11 @@ LalrGetTerminalId(PSCRIPT_ENGINE_TOKEN Token)
         if (Token->Type == HEX)
         {
             if (!strcmp("_hex", LalrTerminalMap[i]))
+                return i;
+        }
+        else if (Token->Type == FLOAT_LITERAL)
+        {
+            if (!strcmp("_float", LalrTerminalMap[i]))
                 return i;
         }
         else if (Token->Type == GLOBAL_ID || Token->Type == GLOBAL_UNRESOLVED_ID)

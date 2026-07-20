@@ -116,6 +116,7 @@ E12->_hex @PUSH
 E12->_decimal @PUSH
 E12->_octal @PUSH
 E12->_binary @PUSH
+E12->_float @PUSH
 E12->_pseudo_register @PUSH
 
 

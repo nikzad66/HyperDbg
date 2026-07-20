@@ -291,6 +291,26 @@ hyperdbg_u_unset_text_message_callback()
 }
 
 /**
+ * @brief Execute a script with the deterministic local evaluator used by tests.
+ *
+ * @param expression Script body without the leading '?' command token
+ * @return BOOLEAN TRUE when parsing and evaluation complete without error
+ */
+BOOLEAN
+hyperdbg_u_test_script_engine(CHAR * expression)
+{
+    extern BOOLEAN g_CurrentExprEvalResultHasError;
+
+    if (!expression)
+    {
+        return FALSE;
+    }
+
+    ScriptEngineWrapperTestParser(expression);
+    return !g_CurrentExprEvalResultHasError;
+}
+
+/**
  * @brief Parsing the command line options for scripts
  * @param argc
  * @param argv

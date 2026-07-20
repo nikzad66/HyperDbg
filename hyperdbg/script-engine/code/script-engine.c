@@ -13,6 +13,9 @@
 #include "pch.h"
 #include "platform/user/header/platform-lib-calls.h"
 
+#include <errno.h>
+#include <locale.h>
+
 // #define _SCRIPT_ENGINE_LALR_DBG_EN
 // #define _SCRIPT_ENGINE_LL1_DBG_EN
 // #define _SCRIPT_ENGINE_CODEGEN_DBG_EN
@@ -39,6 +42,169 @@ static unsigned int             StructPointerDepth;
 static PVARIABLE_TYPE           CurrentStructDefinition;
 static PSCRIPT_ENGINE_TOKEN     LastStructObject;
 static PVARIABLE_TYPE           LastStructObjectType;
+
+static UINT64
+GetFloatingValueKind(PVARIABLE_TYPE VariableType)
+{
+    if (VariableType && VariableType->Kind == TY_FLOAT)
+    {
+        return SYMBOL_VALUE_KIND_FLOAT32;
+    }
+
+    if (VariableType && VariableType->Kind == TY_DOUBLE)
+    {
+        return SYMBOL_VALUE_KIND_FLOAT64;
+    }
+
+    return SYMBOL_VALUE_KIND_INTEGER;
+}
+
+static BOOLEAN
+IsFloatingVariableType(PVARIABLE_TYPE VariableType)
+{
+    return VariableType && (VariableType->Kind == TY_FLOAT || VariableType->Kind == TY_DOUBLE);
+}
+
+static BOOLEAN
+IsFloatingComparisonOperator(const CHAR * Operator)
+{
+    return !strcmp(Operator, "@GT") || !strcmp(Operator, "@LT") ||
+           !strcmp(Operator, "@EGT") || !strcmp(Operator, "@ELT") ||
+           !strcmp(Operator, "@EQUAL") || !strcmp(Operator, "@NEQ");
+}
+
+static UINT64
+GetFloatingBinaryOpcode(const CHAR * Operator)
+{
+    if (!strcmp(Operator, "@ADD"))
+    {
+        return FUNC_ADD_FLOAT;
+    }
+    if (!strcmp(Operator, "@SUB"))
+    {
+        return FUNC_SUB_FLOAT;
+    }
+    if (!strcmp(Operator, "@MUL"))
+    {
+        return FUNC_MUL_FLOAT;
+    }
+    if (!strcmp(Operator, "@DIV"))
+    {
+        return FUNC_DIV_FLOAT;
+    }
+    if (!strcmp(Operator, "@GT"))
+    {
+        return FUNC_GT_FLOAT;
+    }
+    if (!strcmp(Operator, "@LT"))
+    {
+        return FUNC_LT_FLOAT;
+    }
+    if (!strcmp(Operator, "@EGT"))
+    {
+        return FUNC_EGT_FLOAT;
+    }
+    if (!strcmp(Operator, "@ELT"))
+    {
+        return FUNC_ELT_FLOAT;
+    }
+    if (!strcmp(Operator, "@EQUAL"))
+    {
+        return FUNC_EQUAL_FLOAT;
+    }
+    if (!strcmp(Operator, "@NEQ"))
+    {
+        return FUNC_NEQ_FLOAT;
+    }
+    return 0;
+}
+
+static BOOLEAN
+FloatingLiteralHasNonzeroDigit(const CHAR * Text)
+{
+    while (*Text)
+    {
+        if (*Text >= '1' && *Text <= '9')
+        {
+            return TRUE;
+        }
+        Text++;
+    }
+    return FALSE;
+}
+
+static BOOLEAN
+ParseFloatingLiteral(const CHAR * Text, UINT64 ValueKind, PUINT64 RawBits, PSCRIPT_ENGINE_ERROR_TYPE Error)
+{
+    CHAR * End = NULL;
+
+    if (!Text || !RawBits || (ValueKind != SYMBOL_VALUE_KIND_FLOAT32 && ValueKind != SYMBOL_VALUE_KIND_FLOAT64))
+    {
+        *Error = SCRIPT_ENGINE_ERROR_INVALID_FLOAT_LITERAL;
+        return FALSE;
+    }
+
+#ifdef _WIN32
+    _locale_t Locale = _create_locale(LC_NUMERIC, "C");
+    if (!Locale)
+    {
+        *Error = SCRIPT_ENGINE_ERROR_INVALID_FLOAT_LITERAL;
+        return FALSE;
+    }
+
+    if (ValueKind == SYMBOL_VALUE_KIND_FLOAT32)
+    {
+        float  Value = _strtof_l(Text, &End, Locale);
+        UINT32 Bits  = 0;
+        memcpy(&Bits, &Value, sizeof(Bits));
+        *RawBits = Bits;
+    }
+    else
+    {
+        double Value = _strtod_l(Text, &End, Locale);
+        memcpy(RawBits, &Value, sizeof(Value));
+    }
+    _free_locale(Locale);
+#else
+    locale_t Locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
+    if (!Locale)
+    {
+        *Error = SCRIPT_ENGINE_ERROR_INVALID_FLOAT_LITERAL;
+        return FALSE;
+    }
+
+    if (ValueKind == SYMBOL_VALUE_KIND_FLOAT32)
+    {
+        float  Value = strtof_l(Text, &End, Locale);
+        UINT32 Bits  = 0;
+        memcpy(&Bits, &Value, sizeof(Bits));
+        *RawBits = Bits;
+    }
+    else
+    {
+        double Value = strtod_l(Text, &End, Locale);
+        memcpy(RawBits, &Value, sizeof(Value));
+    }
+    freelocale(Locale);
+#endif
+
+    if (End == Text || *End != '\0')
+    {
+        *Error = SCRIPT_ENGINE_ERROR_INVALID_FLOAT_LITERAL;
+        return FALSE;
+    }
+
+    if ((ValueKind == SYMBOL_VALUE_KIND_FLOAT32 && ((*RawBits & 0x7f800000ULL) == 0x7f800000ULL)) ||
+        (ValueKind == SYMBOL_VALUE_KIND_FLOAT64 && ((*RawBits & 0x7ff0000000000000ULL) == 0x7ff0000000000000ULL)) ||
+        ((*RawBits & (ValueKind == SYMBOL_VALUE_KIND_FLOAT32 ? 0x7fffffffULL : 0x7fffffffffffffffULL)) == 0 &&
+         FloatingLiteralHasNonzeroDigit(Text)))
+    {
+        *Error = SCRIPT_ENGINE_ERROR_FLOAT_OUT_OF_RANGE;
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 static unsigned int
 GetStructPointerAddressSpace(PVARIABLE_TYPE PointerType, PSCRIPT_ENGINE_TOKEN PointerToken)
@@ -1986,6 +2152,8 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
         }
         else if (!strcmp(Operator->Value, "@MOV"))
         {
+            BOOLEAN IsFloatingInitialization = FALSE;
+
             PushSymbol(CodeBuffer, OperatorSymbol);
             Op0       = Pop(MatchedStack);
             Op0Symbol = ToSymbol(Op0, Error);
@@ -2038,6 +2206,9 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
                         VariableType              = PointerVariableType;
                     }
 
+                    Op1->VariableType = VariableType;
+                    IsFloatingInitialization = VariableType->Kind == TY_FLOAT || VariableType->Kind == TY_DOUBLE;
+
                     if (Op1->Type == LOCAL_UNRESOLVED_ID || Op1->Type == LOCAL_ID)
                     {
                         SetLocalIdentifierVariableType(Op1, VariableType);
@@ -2047,6 +2218,40 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
                         SetGlobalIdentifierVariableType(Op1, VariableType);
                     }
                 }
+            }
+
+            if (IsFloatingInitialization)
+            {
+                UINT64 ValueKind = GetFloatingValueKind(VariableType);
+                BOOLEAN RequiresConversion = FALSE;
+
+                if (Op1->Type != LOCAL_UNRESOLVED_ID && Op1->Type != LOCAL_ID)
+                {
+                    *Error = SCRIPT_ENGINE_ERROR_UNSUPPORTED_FLOAT_OPERATION;
+                    break;
+                }
+
+                if (Op0->Type == FLOAT_LITERAL)
+                {
+                    if (!ParseFloatingLiteral(Op0->Value, ValueKind, &Op0Symbol->Value, Error))
+                    {
+                        break;
+                    }
+                    Op0Symbol->Len = ValueKind;
+                }
+                else if (!IsFloatingVariableType((PVARIABLE_TYPE)Op0->VariableType))
+                {
+                    *Error = SCRIPT_ENGINE_ERROR_UNSUPPORTED_FLOAT_OPERATION;
+                    break;
+                }
+                else
+                {
+                    RequiresConversion = Op0Symbol->Len != ValueKind;
+                }
+
+                Op1Symbol->Len = ValueKind;
+                (CodeBuffer->Head + CodeBuffer->Pointer - 1)->Value =
+                    RequiresConversion ? FUNC_CONVERT_FLOAT : FUNC_MOV_FLOAT;
             }
 
             if (Op0->VariableType && Op1->VariableType &&
@@ -2516,22 +2721,63 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
         }
         else if (IsType1Func(Operator))
         {
-            PushSymbol(CodeBuffer, OperatorSymbol);
-            Op0          = Pop(MatchedStack);
-            VariableType = (VARIABLE_TYPE *)Op0->VariableType;
-            Op0Symbol    = ToSymbol(Op0, Error);
+            Op0 = Pop(MatchedStack);
 
-            Temp = NewTemp(Error);
-            Push(MatchedStack, Temp);
-            TempSymbol = ToSymbol(Temp, Error);
-
-            PushSymbol(CodeBuffer, Op0Symbol);
-            PushSymbol(CodeBuffer, TempSymbol);
-
-            FreeTemp(Op0);
-            if (*Error != SCRIPT_ENGINE_ERROR_FREE)
+            if (!strcmp(Operator->Value, "@NEG") && Op0->Type == FLOAT_LITERAL)
             {
-                break;
+                PSCRIPT_ENGINE_TOKEN FoldedToken;
+                CHAR *               FoldedValue;
+                SIZE_T               ValueLength = strlen(Op0->Value);
+
+                if (Op0->Value[0] == '-')
+                {
+                    FoldedToken = NewToken(FLOAT_LITERAL, Op0->Value + 1);
+                }
+                else
+                {
+                    FoldedValue = (CHAR *)malloc(ValueLength + 2);
+                    if (!FoldedValue)
+                    {
+                        *Error = SCRIPT_ENGINE_ERROR_TEMP_LIST_FULL;
+                        RemoveToken(&Op0);
+                        break;
+                    }
+                    FoldedValue[0] = '-';
+                    memcpy(FoldedValue + 1, Op0->Value, ValueLength + 1);
+                    FoldedToken = NewToken(FLOAT_LITERAL, FoldedValue);
+                    free(FoldedValue);
+                }
+
+                FoldedToken->VariableType = (VARIABLE_TYPE *)VARIABLE_TYPE_DOUBLE;
+                RemoveToken(&Op0);
+                Push(MatchedStack, FoldedToken);
+            }
+            else
+            {
+                VariableType = (VARIABLE_TYPE *)Op0->VariableType;
+                Op0Symbol    = ToSymbol(Op0, Error);
+
+                if (!strcmp(Operator->Value, "@NEG") &&
+                    VariableType &&
+                    (VariableType->Kind == TY_FLOAT || VariableType->Kind == TY_DOUBLE))
+                {
+                    OperatorSymbol->Value = FUNC_NEG_FLOAT;
+                }
+
+                PushSymbol(CodeBuffer, OperatorSymbol);
+                Temp               = NewTemp(Error);
+                Temp->VariableType = VariableType;
+                Push(MatchedStack, Temp);
+                TempSymbol = ToSymbol(Temp, Error);
+
+                PushSymbol(CodeBuffer, Op0Symbol);
+                PushSymbol(CodeBuffer, TempSymbol);
+
+                FreeTemp(Op0);
+                if (*Error != SCRIPT_ENGINE_ERROR_FREE)
+                {
+                    break;
+                }
             }
         }
         else if (IsType4Func(Operator))
@@ -2613,7 +2859,7 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
                     CHAR Temp = *(Str + 1);
 
                     if (Temp == 'd' || Temp == 'i' || Temp == 'u' || Temp == 'o' ||
-                        Temp == 'x' || Temp == 'c' || Temp == 'p' || Temp == 's' ||
+                        Temp == 'x' || Temp == 'c' || Temp == 'p' || Temp == 's' || Temp == 'f' ||
 
                         !strncmp(Str, "%ws", 3) || !strncmp(Str, "%ls", 3) ||
 
@@ -2964,7 +3210,51 @@ CodeGen(PSCRIPT_ENGINE_TOKEN_LIST MatchedStack, PSYMBOL_BUFFER CodeBuffer, PSCRI
             Op0          = TopIndexed(MatchedStack, 0);
             Op1          = TopIndexed(MatchedStack, 1);
 
-            if (!strcmp(Operator->Value, "@ADD") || !strcmp(Operator->Value, "@SUB"))
+            if (IsFloatingVariableType((PVARIABLE_TYPE)Op0->VariableType) ||
+                IsFloatingVariableType((PVARIABLE_TYPE)Op1->VariableType))
+            {
+                UINT64 FloatingOpcode = GetFloatingBinaryOpcode(Operator->Value);
+                if (!FloatingOpcode ||
+                    !IsFloatingVariableType((PVARIABLE_TYPE)Op0->VariableType) ||
+                    !IsFloatingVariableType((PVARIABLE_TYPE)Op1->VariableType))
+                {
+                    *Error = SCRIPT_ENGINE_ERROR_UNSUPPORTED_FLOAT_OPERATION;
+                    Op0 = Pop(MatchedStack);
+                    Op1 = Pop(MatchedStack);
+                    RemoveToken(&Op0);
+                    RemoveToken(&Op1);
+                    Handled = TRUE;
+                }
+                else
+                {
+                    PVARIABLE_TYPE ResultType =
+                        ((PVARIABLE_TYPE)Op0->VariableType)->Kind == TY_DOUBLE ||
+                                ((PVARIABLE_TYPE)Op1->VariableType)->Kind == TY_DOUBLE ?
+                            VARIABLE_TYPE_DOUBLE : VARIABLE_TYPE_FLOAT;
+
+                    Op0       = Pop(MatchedStack);
+                    Op1       = Pop(MatchedStack);
+                    Op0Symbol = ToSymbol(Op0, Error);
+                    Op1Symbol = ToSymbol(Op1, Error);
+                    Temp      = NewTemp(Error);
+                    Temp->VariableType = IsFloatingComparisonOperator(Operator->Value) ?
+                                             VARIABLE_TYPE_LONG : ResultType;
+                    TempSymbol = ToSymbol(Temp, Error);
+
+                    OperatorSymbol->Value = FloatingOpcode;
+                    PushSymbol(CodeBuffer, OperatorSymbol);
+                    PushSymbol(CodeBuffer, Op0Symbol);
+                    PushSymbol(CodeBuffer, Op1Symbol);
+                    PushSymbol(CodeBuffer, TempSymbol);
+                    Push(MatchedStack, Temp);
+
+                    FreeTemp(Op0);
+                    FreeTemp(Op1);
+                    Handled = TRUE;
+                }
+            }
+
+            if (!Handled && (!strcmp(Operator->Value, "@ADD") || !strcmp(Operator->Value, "@SUB")))
             {
                 if (((VARIABLE_TYPE *)Op0->VariableType)->Kind == TY_PTR && ((VARIABLE_TYPE *)Op1->VariableType)->Kind == TY_PTR)
                 {
@@ -4517,6 +4807,7 @@ ToSymbol(PSCRIPT_ENGINE_TOKEN Token, PSCRIPT_ENGINE_ERROR_TYPE Error)
     case LOCAL_ID:
     {
         Symbol->Value = GetLocalIdentifierVal(Token);
+        Symbol->Len   = GetFloatingValueKind((PVARIABLE_TYPE)Token->VariableType);
 
         if (((VARIABLE_TYPE *)Token->VariableType)->Kind == TY_ARRAY ||
             ((VARIABLE_TYPE *)Token->VariableType)->Kind == TY_STRUCT)
@@ -4551,6 +4842,16 @@ ToSymbol(PSCRIPT_ENGINE_TOKEN Token, PSCRIPT_ENGINE_ERROR_TYPE Error)
         SetType(&Symbol->Type, SYMBOL_NUM_TYPE);
         return Symbol;
 
+    case FLOAT_LITERAL:
+        if (!ParseFloatingLiteral(Token->Value, SYMBOL_VALUE_KIND_FLOAT64, &Symbol->Value, Error))
+        {
+            Symbol->Type = INVALID;
+            return Symbol;
+        }
+        Symbol->Len = SYMBOL_VALUE_KIND_FLOAT64;
+        SetType(&Symbol->Type, SYMBOL_NUM_TYPE);
+        return Symbol;
+
     case REGISTER:
         Symbol->Value = RegisterToInt(Token->Value);
         SetType(&Symbol->Type, SYMBOL_REGISTER_TYPE);
@@ -4569,6 +4870,7 @@ ToSymbol(PSCRIPT_ENGINE_TOKEN Token, PSCRIPT_ENGINE_ERROR_TYPE Error)
     case TEMP:
 
         Symbol->Value = DecimalToInt(Token->Value);
+        Symbol->Len   = GetFloatingValueKind((PVARIABLE_TYPE)Token->VariableType);
 
         if (Token->IsAddress)
         {
@@ -5062,6 +5364,15 @@ HandleError(PSCRIPT_ENGINE_ERROR_TYPE Error, char * str)
     case SCRIPT_ENGINE_ERROR_INVALID_ARRAY_SIZE:
         strcat(Message, "Invalid or overflowing array size");
         return Message;
+    case SCRIPT_ENGINE_ERROR_INVALID_FLOAT_LITERAL:
+        strcat(Message, "Invalid floating-point literal");
+        return Message;
+    case SCRIPT_ENGINE_ERROR_FLOAT_OUT_OF_RANGE:
+        strcat(Message, "Floating-point literal is out of range");
+        return Message;
+    case SCRIPT_ENGINE_ERROR_UNSUPPORTED_FLOAT_OPERATION:
+        strcat(Message, "Unsupported floating-point operation");
+        return Message;
     default:
         strcat(Message, "Unknown Error: ");
         return Message;
@@ -5347,6 +5658,10 @@ LalrIsOperandType(PSCRIPT_ENGINE_TOKEN Token)
     {
         return TRUE;
     }
+    else if (Token->Type == FLOAT_LITERAL)
+    {
+        return TRUE;
+    }
     else if (Token->Type == REGISTER)
     {
         return TRUE;
@@ -5409,8 +5724,31 @@ FuncGetNumberOfOperands(UINT64 FuncType, UINT32 * NumberOfGetOperands, UINT32 * 
     {
 
     //
-	// This code is not tested yet, so they are commented out for now
+    // This code is not tested yet, so they are commented out for now
     // 
+    //case FUNC_MOV_FLOAT:
+    //case FUNC_NEG_FLOAT:
+    //case FUNC_CONVERT_FLOAT:
+    //    *NumberOfGetOperands = 1;
+    //    *NumberOfSetOperands = 1;
+    //    Result               = TRUE;
+    //    break;
+
+    //case FUNC_ADD_FLOAT:
+    //case FUNC_SUB_FLOAT:
+    //case FUNC_MUL_FLOAT:
+    //case FUNC_DIV_FLOAT:
+    //case FUNC_GT_FLOAT:
+    //case FUNC_LT_FLOAT:
+    //case FUNC_EGT_FLOAT:
+    //case FUNC_ELT_FLOAT:
+    //case FUNC_EQUAL_FLOAT:
+    //case FUNC_NEQ_FLOAT:
+    //    *NumberOfGetOperands = 2;
+    //    *NumberOfSetOperands = 1;
+    //    Result               = TRUE;
+    //    break;
+
     //case FUNC_TYPED_LOAD:
     //    *NumberOfGetOperands = 3;
     //    *NumberOfSetOperands = 1;

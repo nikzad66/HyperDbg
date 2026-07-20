@@ -201,6 +201,8 @@ class LALR1Parser:
 
         elif Var in self.SPECIAL_TOKENS:
             return "SPECIAL_TOKEN"
+        elif Var == "_float":
+            return "FLOAT_LITERAL"
         elif Var[0] == "_":
             return Var[1:].upper()
         else:

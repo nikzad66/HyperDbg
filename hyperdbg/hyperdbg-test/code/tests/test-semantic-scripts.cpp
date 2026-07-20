@@ -13,14 +13,69 @@
 
 namespace fs = std::filesystem;
 
+static std::mutex              SemanticOutputMutex;
+static std::condition_variable SemanticOutputChanged;
+static std::string             SemanticOutput;
+
+static VOID
+CaptureSemanticOutput(CHAR * Message)
+{
+    if (!Message)
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> Lock(SemanticOutputMutex);
+        SemanticOutput.append(Message);
+    }
+    SemanticOutputChanged.notify_all();
+}
+
+static BOOLEAN
+HasAllExpectedSemanticOutput(const std::string & Output)
+{
+    if (Output.find("was failed") != std::string::npos)
+    {
+        return FALSE;
+    }
+
+    std::set<UINT32> SuccessfulCases;
+    std::regex       SuccessPattern("test case ([0-9]+) was successful");
+    for (std::sregex_iterator Match(Output.begin(), Output.end(), SuccessPattern), End;
+         Match != End;
+         ++Match)
+    {
+        SuccessfulCases.insert((UINT32)std::stoul((*Match)[1].str()));
+    }
+
+    return SuccessfulCases.size() == 83 &&
+           *SuccessfulCases.begin() == 0 &&
+           *SuccessfulCases.rbegin() == 82 &&
+           Output.find("floating point: 11.500000 0.500000 0.500000 11.000000 0.789000") != std::string::npos &&
+           Output.find("negative floating point: -11.500000 -0.500000 -0.789000 -0.000000") != std::string::npos &&
+           Output.find("runtime negative floating point: -0.789000") != std::string::npos &&
+           Output.find("runtime positive floating point: 0.500000") != std::string::npos &&
+           Output.find("floating arithmetic was successful") != std::string::npos &&
+           Output.find("floating arithmetic: 12.000000 11.000000 3.000000 3.000000") != std::string::npos &&
+           Output.find("double arithmetic: 1.000000 3.500000 5.000000 2.250000") != std::string::npos &&
+           Output.find("mixed and precedence: 1.750000 7.000000 -6.000000") != std::string::npos;
+}
+
+static BOOLEAN
+SemanticRunFinishedOrFailed(const std::string & Output)
+{
+    return Output.find("was failed") != std::string::npos || HasAllExpectedSemanticOutput(Output);
+}
+
 /**
  * @brief Read directory of semantic test cases and run each of them
  *
  * @param ScriptSemanticPath Path to the semantic test cases
  *
- * @return VOID
+ * @return BOOLEAN TRUE if all files were read and submitted successfully
  */
-VOID
+BOOLEAN
 ReadDirectoryAndTestSemanticTestCases(const CHAR * ScriptSemanticPath)
 {
     //
@@ -28,62 +83,54 @@ ReadDirectoryAndTestSemanticTestCases(const CHAR * ScriptSemanticPath)
     //
     try
     {
-        for (const auto & entry : fs::directory_iterator(ScriptSemanticPath))
+        std::vector<fs::path> TestFiles;
+        for (const auto & Entry : fs::directory_iterator(ScriptSemanticPath))
         {
-            //
-            // Check if the entry is a file
-            //
-            if (entry.is_regular_file())
+            if (Entry.is_regular_file() && Entry.path().extension() == ".ds")
             {
-                //
-                // Get the file path
-                //
-                std::string FilePath = entry.path().string();
+                TestFiles.push_back(Entry.path());
+            }
+        }
 
-                //
-                // Output the file name
-                //
-                // std::cout << "Test case file: " << entry.path().filename().string() << std::endl;
+        std::sort(TestFiles.begin(), TestFiles.end());
+        if (TestFiles.empty())
+        {
+            std::cerr << "No semantic .ds files were found in: " << ScriptSemanticPath << std::endl;
+            return FALSE;
+        }
 
-                //
-                // Open the file and read its contents
-                //
-                std::ifstream File(FilePath);
-                if (File.is_open())
-                {
-                    std::string Content((std::istreambuf_iterator<char>(File)),
-                                        std::istreambuf_iterator<char>());
+        for (const auto & FilePath : TestFiles)
+        {
+            std::ifstream File(FilePath, std::ios::binary);
+            if (!File)
+            {
+                std::cerr << "Could not open file: " << FilePath.string() << std::endl;
+                return FALSE;
+            }
 
-                    //
-                    // Display the content of the file
-                    //
-                    std::cout << "Executing file " << entry.path().filename().string() << std::endl;
+            std::string Content((std::istreambuf_iterator<char>(File)),
+                                std::istreambuf_iterator<char>());
+            if (File.bad())
+            {
+                std::cerr << "Could not read file: " << FilePath.string() << std::endl;
+                return FALSE;
+            }
 
-                    // std::cout << content << std::endl;
-
-                    //
-                    // Run the test case command
-                    //
-                    hyperdbg_u_run_command((CHAR *)Content.c_str());
-
-                    std::cout << "--------------------------------------------" << std::endl;
-
-                    //
-                    // Close the file
-                    //
-                    File.close();
-                }
-                else
-                {
-                    std::cerr << "Could not open file: " << FilePath << std::endl;
-                }
+            std::cout << "Executing file " << FilePath.filename().string() << std::endl;
+            if (hyperdbg_u_run_command(Content.data()) != 0)
+            {
+                std::cerr << "Command execution failed for: " << FilePath.string() << std::endl;
+                return FALSE;
             }
         }
     }
     catch (const fs::filesystem_error & e)
     {
         std::cerr << "Filesystem error: " << e.what() << std::endl;
+        return FALSE;
     }
+
+    return TRUE;
 }
 
 /**
@@ -94,7 +141,6 @@ ReadDirectoryAndTestSemanticTestCases(const CHAR * ScriptSemanticPath)
 BOOLEAN
 TestSemanticScripts()
 {
-    INT32 TestNum           = 0;
     CHAR  dirPath[MAX_PATH] = {0};
 
     //
@@ -119,15 +165,37 @@ TestSemanticScripts()
         return FALSE;
     }
 
-    //
-    // Run test cases
-    //
-    ReadDirectoryAndTestSemanticTestCases(dirPath);
+    {
+        std::lock_guard<std::mutex> Lock(SemanticOutputMutex);
+        SemanticOutput.clear();
+    }
+    hyperdbg_u_set_text_message_callback((PVOID)CaptureSemanticOutput);
+
+    BOOLEAN TestResult = ReadDirectoryAndTestSemanticTestCases(dirPath);
+    if (TestResult)
+    {
+        std::unique_lock<std::mutex> Lock(SemanticOutputMutex);
+        BOOLEAN Completed = SemanticOutputChanged.wait_for(
+            Lock,
+            std::chrono::seconds(60),
+            [] { return SemanticRunFinishedOrFailed(SemanticOutput); });
+
+        TestResult = Completed &&
+                     SemanticOutput.find("was failed") == std::string::npos &&
+                     HasAllExpectedSemanticOutput(SemanticOutput);
+        if (!TestResult)
+        {
+            std::cerr << "Semantic output was incomplete, timed out, or contained a failure.\n"
+                      << SemanticOutput << std::endl;
+        }
+    }
+
+    hyperdbg_u_unset_text_message_callback();
 
     //
     // Close the connection
     //
     hyperdbg_u_debug_close_remote_debugger();
 
-    return TRUE;
+    return TestResult;
 }

@@ -447,7 +447,10 @@ class LL1Parser:
             "aggregate_copy", "aggregate_zero"
             , "struct_initializer_begin", "struct_initializer_end",
             "struct_pointer_cast", "member_address", "member_read",
-            "member_dot_lvalue", "member_arrow_lvalue", "member_dot_read", "member_arrow_read"
+            "member_dot_lvalue", "member_arrow_lvalue", "member_dot_read", "member_arrow_read",
+            "mov_float", "neg_float", "add_float", "sub_float", "mul_float", "div_float",
+            "gt_float", "lt_float", "egt_float", "elt_float", "equal_float", "neq_float",
+            "convert_float"
         }
         aggregate_keywords = {"struct", "typedef"}
         legacy_semantics = [x for x in self.SemantiRulesList if x not in aggregate_semantics]
@@ -701,6 +704,8 @@ class LL1Parser:
 
         elif Var in self.SPECIAL_TOKENS:
             return "SPECIAL_TOKEN"
+        elif Var == "_float":
+            return "FLOAT_LITERAL"
         elif Var[0] == "_":
             return Var[1:].upper()
         else:

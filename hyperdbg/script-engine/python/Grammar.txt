@@ -47,7 +47,7 @@
 
 .AssignmentOperator->add_assignment sub_assignment mul_assignment div_assignment mod_assignment asl_assignment asr_assignment and_assignment xor_assignment or_assignment
 
-.SemantiRules->jmp jz jnz mov start_of_do_while start_of_do_while_commands end_of_do_while start_of_for for_inc_dec start_of_for_ommands end_of_if ignore_lvalue push pop call ret struct_forward_declaration struct_definition_begin struct_definition_end struct_variable_declaration struct_member_declaration typedef_declaration struct_pointer struct_array_dimension struct_declarator_complete typed_load typed_store aggregate_copy aggregate_zero struct_initializer_begin struct_initializer_end struct_pointer_cast member_address member_read member_dot_lvalue member_arrow_lvalue member_dot_read member_arrow_read
+.SemantiRules->jmp jz jnz mov start_of_do_while start_of_do_while_commands end_of_do_while start_of_for for_inc_dec start_of_for_ommands end_of_if ignore_lvalue push pop call ret struct_forward_declaration struct_definition_begin struct_definition_end struct_variable_declaration struct_member_declaration typedef_declaration struct_pointer struct_array_dimension struct_declarator_complete typed_load typed_store aggregate_copy aggregate_zero struct_initializer_begin struct_initializer_end struct_pointer_cast member_address member_read member_dot_lvalue member_arrow_lvalue member_dot_read member_arrow_read mov_float neg_float add_float sub_float mul_float div_float gt_float lt_float egt_float elt_float equal_float neq_float convert_float
 
 .Registers->rax eax ax ah al rcx ecx cx ch cl rdx edx dx dh dl rbx ebx bx bh bl rsp esp sp spl rbp ebp bp bpl rsi esi si sil rdi edi di dil r8 r8d r8w r8h r8l r9 r9d r9w r9h r9l r10 r10d r10w r10h r10l r11 r11d r11w r11h r11l r12 r12d r12w r12h r12l r13 r13d r13w r13h r13l r14 r14d r14w r14h r14l r15 r15d r15w r15h r15l ds es fs gs cs ss rflags eflags flags cf pf af zf sf tf if df of iopl nt rf vm ac vif vip id rip eip ip idtr ldtr gdtr tr cr0 cr2 cr3 cr4 cr8 dr0 dr1 dr2 dr3 dr6 dr7
 
@@ -363,6 +363,7 @@ CONST_NUMBER->@PUSH _hex
 CONST_NUMBER->@PUSH _decimal
 CONST_NUMBER->@PUSH _octal
 CONST_NUMBER->@PUSH _binary
+CONST_NUMBER->@PUSH _float
 
 E12->CONST_NUMBER
 
