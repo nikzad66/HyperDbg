@@ -318,7 +318,7 @@ GetToken(char * c, char * str)
         else
         {
             strcpy(Token->Value, "!");
-            Token->Type = UNKNOWN;
+            Token->Type = SPECIAL_TOKEN;
             return Token;
         }
     case '%':
@@ -541,6 +541,7 @@ GetToken(char * c, char * str)
                     {
                         Token->Type         = GLOBAL_ID;
                         Token->VariableType = GetGlobalIdentifierVariableType(Token);
+                        Token->IsImplicitType = GetGlobalIdentifierIsImplicitType(Token);
                     }
                     else
                     {
@@ -827,6 +828,10 @@ GetToken(char * c, char * str)
                 {
                     Token->Type = SCRIPT_VARIABLE_TYPE;
                 }
+                else if ((Token->VariableType = FindTypedefType(Token->Value)) != NULL)
+                {
+                    Token->Type = SCRIPT_VARIABLE_TYPE;
+                }
                 else
                 {
                     BOOLEAN WasFound = FALSE;
@@ -866,6 +871,7 @@ GetToken(char * c, char * str)
                             {
                                 Token->Type         = LOCAL_ID;
                                 Token->VariableType = GetLocalIdentifierVariableType(Token);
+                                Token->IsImplicitType = GetLocalIdentifierIsImplicitType(Token);
                             }
                             else
                             {
@@ -887,6 +893,10 @@ GetToken(char * c, char * str)
                     Token->Type = REGISTER;
                 }
                 else if (IsVariableType(Token->Value))
+                {
+                    Token->Type = SCRIPT_VARIABLE_TYPE;
+                }
+                else if ((Token->VariableType = FindTypedefType(Token->Value)) != NULL)
                 {
                     Token->Type = SCRIPT_VARIABLE_TYPE;
                 }
@@ -929,6 +939,7 @@ GetToken(char * c, char * str)
                             {
                                 Token->Type         = LOCAL_ID;
                                 Token->VariableType = GetLocalIdentifierVariableType(Token);
+                                Token->IsImplicitType = GetLocalIdentifierIsImplicitType(Token);
                             }
                             else
                             {
@@ -962,6 +973,10 @@ GetToken(char * c, char * str)
                 Token->Type = REGISTER;
             }
             else if (IsVariableType(Token->Value))
+            {
+                Token->Type = SCRIPT_VARIABLE_TYPE;
+            }
+            else if ((Token->VariableType = FindTypedefType(Token->Value)) != NULL)
             {
                 Token->Type = SCRIPT_VARIABLE_TYPE;
             }
@@ -1004,6 +1019,7 @@ GetToken(char * c, char * str)
                         {
                             Token->Type         = LOCAL_ID;
                             Token->VariableType = GetLocalIdentifierVariableType(Token);
+                            Token->IsImplicitType = GetLocalIdentifierIsImplicitType(Token);
                         }
                         else
                         {

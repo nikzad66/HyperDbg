@@ -134,6 +134,18 @@ CommandTestAllFunctionalities()
         return;
     }
 
+    if (!OpenHyperDbgTestProcess(&ThreadHandle, &ProcessHandle, (CHAR *)TEST_CASE_PARAMETER_FOR_SCRIPT_FLOATING_POINT))
+    {
+        ShowMessages("err, start HyperDbg test process for testing floating-point scripts\n");
+        return;
+    }
+
+    if (!OpenHyperDbgTestProcess(&ThreadHandle, &ProcessHandle, (CHAR *)TEST_CASE_PARAMETER_FOR_SCRIPT_VARIABLE_TYPES))
+    {
+        ShowMessages("err, start HyperDbg test process for testing variable-type scripts\n");
+        return;
+    }
+
     //
     // Test script engine (script parser) using semantic tests
     //

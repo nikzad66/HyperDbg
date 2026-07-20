@@ -30,4 +30,5 @@ TestSemanticScripts();
 BOOLEAN
 TestScriptEngineFloatingPoint();
 
-#define TEST_CASE_PARAMETER_FOR_SCRIPT_FLOATING_POINT "test-script-floating-point"
+BOOLEAN
+TestScriptEngineVariableTypes();

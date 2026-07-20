@@ -115,12 +115,275 @@ typedef struct _SCRIPT_ENGINE_SOFT_FLOAT
 } SCRIPT_ENGINE_SOFT_FLOAT;
 
 static BOOLEAN
+ScriptEngineSoftFloatUnpack(UINT64 ValueKind, UINT64 RawBits, SCRIPT_ENGINE_SOFT_FLOAT * Value);
+
+static BOOLEAN
+ScriptEngineSoftFloatPack(UINT64 ValueKind,
+                          BOOLEAN Negative,
+                          INT32 Exponent,
+                          const SCRIPT_ENGINE_UINT128 * InputSignificand,
+                          PUINT64 RawBits);
+
+static BOOLEAN
 ScriptEngineIntegerSymbolIsWritable(PSCRIPT_ENGINE_GENERAL_REGISTERS Registers, PSYMBOL Symbol)
 {
     return Symbol->Len == SYMBOL_VALUE_KIND_INTEGER &&
            (Symbol->Type & 0xffffffffULL) == SYMBOL_TEMP_TYPE &&
            Registers->StackBaseIndx < MAX_STACK_BUFFER_COUNT &&
            Symbol->Value < MAX_STACK_BUFFER_COUNT - Registers->StackBaseIndx;
+}
+
+static BOOLEAN
+ScriptEngineHasOperands(PSYMBOL_BUFFER CodeBuffer, UINT64 Index, UINT32 Count)
+{
+    return Index <= CodeBuffer->Pointer && Count <= CodeBuffer->Pointer - Index;
+}
+
+static BOOLEAN
+ScriptEngineScalarTypeIsInteger(UINT64 TypeId)
+{
+    return TypeId >= SCRIPT_SCALAR_TYPE_BOOL && TypeId <= SCRIPT_SCALAR_TYPE_U64;
+}
+
+static BOOLEAN
+ScriptEngineScalarTypeIsFloating(UINT64 TypeId)
+{
+    return TypeId == SCRIPT_SCALAR_TYPE_F32 || TypeId == SCRIPT_SCALAR_TYPE_F64;
+}
+
+static UINT32
+ScriptEngineScalarTypeWidth(UINT64 TypeId)
+{
+    switch (TypeId)
+    {
+    case SCRIPT_SCALAR_TYPE_BOOL:
+    case SCRIPT_SCALAR_TYPE_I8:
+    case SCRIPT_SCALAR_TYPE_U8:
+        return 8;
+    case SCRIPT_SCALAR_TYPE_I16:
+    case SCRIPT_SCALAR_TYPE_U16:
+        return 16;
+    case SCRIPT_SCALAR_TYPE_I32:
+    case SCRIPT_SCALAR_TYPE_U32:
+    case SCRIPT_SCALAR_TYPE_F32:
+        return 32;
+    case SCRIPT_SCALAR_TYPE_I64:
+    case SCRIPT_SCALAR_TYPE_U64:
+    case SCRIPT_SCALAR_TYPE_F64:
+    case SCRIPT_SCALAR_TYPE_POINTER:
+        return 64;
+    default:
+        return 0;
+    }
+}
+
+static BOOLEAN
+ScriptEngineScalarTypeIsSigned(UINT64 TypeId)
+{
+    return TypeId == SCRIPT_SCALAR_TYPE_I8 || TypeId == SCRIPT_SCALAR_TYPE_I16 ||
+           TypeId == SCRIPT_SCALAR_TYPE_I32 || TypeId == SCRIPT_SCALAR_TYPE_I64;
+}
+
+static UINT64
+ScriptEngineNormalizeInteger(UINT64 Value, UINT64 TypeId)
+{
+    UINT32 Width = ScriptEngineScalarTypeWidth(TypeId);
+    UINT64 Mask;
+
+    if (TypeId == SCRIPT_SCALAR_TYPE_BOOL)
+        return Value != 0;
+    if (Width == 64)
+        return Value;
+    Mask  = (1ULL << Width) - 1;
+    Value &= Mask;
+    if (ScriptEngineScalarTypeIsSigned(TypeId) && (Value & (1ULL << (Width - 1))))
+        Value |= ~Mask;
+    return Value;
+}
+
+static BOOLEAN
+ScriptEngineIntegerToFloat(UINT64 Value, UINT64 SourceType, UINT64 DestinationType, PUINT64 Result)
+{
+    SCRIPT_ENGINE_UINT128 Significand = {0, 0};
+    BOOLEAN Negative = FALSE;
+    UINT64 Magnitude;
+    INT32 Exponent = 0;
+
+    Value = ScriptEngineNormalizeInteger(Value, SourceType);
+    if (ScriptEngineScalarTypeIsSigned(SourceType) && (Value & 0x8000000000000000ULL))
+    {
+        Negative  = TRUE;
+        Magnitude = 0ULL - Value;
+    }
+    else
+    {
+        Magnitude = Value;
+    }
+
+    if (Magnitude)
+    {
+        UINT64 Scan = Magnitude;
+        while (Scan >>= 1) Exponent++;
+        Significand.High = Magnitude << (63 - Exponent);
+    }
+
+    return ScriptEngineSoftFloatPack(DestinationType == SCRIPT_SCALAR_TYPE_F32 ?
+                                         SYMBOL_VALUE_KIND_FLOAT32 : SYMBOL_VALUE_KIND_FLOAT64,
+                                     Negative,
+                                     Exponent,
+                                     &Significand,
+                                     Result);
+}
+
+static BOOLEAN
+ScriptEngineFloatToInteger(UINT64 Value, UINT64 SourceType, UINT64 DestinationType, PUINT64 Result)
+{
+    SCRIPT_ENGINE_SOFT_FLOAT FloatValue;
+    UINT64 Magnitude;
+    UINT64 Maximum;
+    UINT32 Width = ScriptEngineScalarTypeWidth(DestinationType);
+
+    if (!ScriptEngineSoftFloatUnpack(SourceType == SCRIPT_SCALAR_TYPE_F32 ?
+                                         SYMBOL_VALUE_KIND_FLOAT32 : SYMBOL_VALUE_KIND_FLOAT64,
+                                     Value,
+                                     &FloatValue))
+        return FALSE;
+    if (FloatValue.IsZero || FloatValue.Exponent < 0)
+    {
+        *Result = 0;
+        return TRUE;
+    }
+    if (FloatValue.Exponent > 63)
+        return FALSE;
+
+    Magnitude = FloatValue.Significand.High >> (63 - FloatValue.Exponent);
+    if (ScriptEngineScalarTypeIsSigned(DestinationType))
+    {
+        Maximum = Width == 64 ? 0x7fffffffffffffffULL : (1ULL << (Width - 1)) - 1;
+        if ((!FloatValue.Negative && Magnitude > Maximum) ||
+            (FloatValue.Negative && Magnitude > Maximum + 1))
+            return FALSE;
+        *Result = FloatValue.Negative ? 0ULL - Magnitude : Magnitude;
+    }
+    else
+    {
+        Maximum = Width == 64 ? ~0ULL : (1ULL << Width) - 1;
+        if (FloatValue.Negative || Magnitude > Maximum)
+            return FALSE;
+        *Result = Magnitude;
+    }
+    *Result = ScriptEngineNormalizeInteger(*Result, DestinationType);
+    return TRUE;
+}
+
+static BOOLEAN
+ScriptEngineCastScalar(UINT64 Value, UINT64 SourceType, UINT64 DestinationType, PUINT64 Result)
+{
+    if (SourceType == SCRIPT_SCALAR_TYPE_F80 || DestinationType == SCRIPT_SCALAR_TYPE_F80 ||
+        SourceType == SCRIPT_SCALAR_TYPE_INVALID || DestinationType == SCRIPT_SCALAR_TYPE_INVALID)
+        return FALSE;
+
+    if ((ScriptEngineScalarTypeIsInteger(SourceType) || SourceType == SCRIPT_SCALAR_TYPE_POINTER) &&
+        (ScriptEngineScalarTypeIsInteger(DestinationType) || DestinationType == SCRIPT_SCALAR_TYPE_POINTER))
+    {
+        *Result = DestinationType == SCRIPT_SCALAR_TYPE_POINTER ?
+                      Value : ScriptEngineNormalizeInteger(Value, DestinationType);
+        return TRUE;
+    }
+    if (ScriptEngineScalarTypeIsFloating(SourceType) && ScriptEngineScalarTypeIsFloating(DestinationType))
+    {
+        SCRIPT_ENGINE_SOFT_FLOAT Converted;
+        if (!ScriptEngineSoftFloatUnpack(SourceType == SCRIPT_SCALAR_TYPE_F32 ?
+                                             SYMBOL_VALUE_KIND_FLOAT32 : SYMBOL_VALUE_KIND_FLOAT64,
+                                         Value,
+                                         &Converted))
+            return FALSE;
+        return ScriptEngineSoftFloatPack(DestinationType == SCRIPT_SCALAR_TYPE_F32 ?
+                                             SYMBOL_VALUE_KIND_FLOAT32 : SYMBOL_VALUE_KIND_FLOAT64,
+                                         Converted.Negative,
+                                         Converted.Exponent,
+                                         &Converted.Significand,
+                                         Result);
+    }
+    if (ScriptEngineScalarTypeIsInteger(SourceType) && ScriptEngineScalarTypeIsFloating(DestinationType))
+        return ScriptEngineIntegerToFloat(Value, SourceType, DestinationType, Result);
+    if (ScriptEngineScalarTypeIsFloating(SourceType) && ScriptEngineScalarTypeIsInteger(DestinationType))
+        return ScriptEngineFloatToInteger(Value, SourceType, DestinationType, Result);
+    return FALSE;
+}
+
+static BOOLEAN
+ScriptEngineExecuteTypedBinary(UINT64 Opcode,
+                               UINT64 Right,
+                               UINT64 Left,
+                               UINT64 TypeId,
+                               PUINT64 Result)
+{
+    UINT32 Width;
+    UINT64 SignedMinimum;
+
+    if (TypeId == SCRIPT_SCALAR_TYPE_POINTER)
+    {
+        if (Opcode == FUNC_GT_TYPED) *Result = Left > Right;
+        else if (Opcode == FUNC_LT_TYPED) *Result = Left < Right;
+        else if (Opcode == FUNC_EGT_TYPED) *Result = Left >= Right;
+        else if (Opcode == FUNC_ELT_TYPED) *Result = Left <= Right;
+        else if (Opcode == FUNC_EQUAL_TYPED) *Result = Left == Right;
+        else if (Opcode == FUNC_NEQ_TYPED) *Result = Left != Right;
+        else return FALSE;
+        return TRUE;
+    }
+    if (!ScriptEngineScalarTypeIsInteger(TypeId))
+        return FALSE;
+    Width = ScriptEngineScalarTypeWidth(TypeId);
+    Left  = ScriptEngineNormalizeInteger(Left, TypeId);
+    Right = ScriptEngineNormalizeInteger(Right, TypeId);
+
+    switch (Opcode)
+    {
+    case FUNC_ADD_TYPED: *Result = Left + Right; break;
+    case FUNC_SUB_TYPED: *Result = Left - Right; break;
+    case FUNC_MUL_TYPED: *Result = Left * Right; break;
+    case FUNC_DIV_TYPED:
+    case FUNC_MOD_TYPED:
+        if (!Right) return FALSE;
+        if (ScriptEngineScalarTypeIsSigned(TypeId))
+        {
+            SignedMinimum = Width == 64 ? 0x8000000000000000ULL : (1ULL << (Width - 1));
+            SignedMinimum = ScriptEngineNormalizeInteger(SignedMinimum, TypeId);
+            if (Left == SignedMinimum && Right == ~0ULL) return FALSE;
+            *Result = Opcode == FUNC_DIV_TYPED ?
+                          (UINT64)((INT64)Left / (INT64)Right) :
+                          (UINT64)((INT64)Left % (INT64)Right);
+        }
+        else
+        {
+            *Result = Opcode == FUNC_DIV_TYPED ? Left / Right : Left % Right;
+        }
+        break;
+    case FUNC_BITWISE_AND_TYPED: *Result = Left & Right; break;
+    case FUNC_BITWISE_OR_TYPED: *Result = Left | Right; break;
+    case FUNC_BITWISE_XOR_TYPED: *Result = Left ^ Right; break;
+    case FUNC_SHIFT_LEFT_TYPED:
+        if (Right >= Width) return FALSE;
+        *Result = Left << Right;
+        break;
+    case FUNC_SHIFT_RIGHT_TYPED:
+        if (Right >= Width) return FALSE;
+        *Result = ScriptEngineScalarTypeIsSigned(TypeId) ?
+                      (UINT64)((INT64)Left >> Right) : Left >> Right;
+        break;
+    case FUNC_GT_TYPED: *Result = ScriptEngineScalarTypeIsSigned(TypeId) ? (INT64)Left > (INT64)Right : Left > Right; return TRUE;
+    case FUNC_LT_TYPED: *Result = ScriptEngineScalarTypeIsSigned(TypeId) ? (INT64)Left < (INT64)Right : Left < Right; return TRUE;
+    case FUNC_EGT_TYPED: *Result = ScriptEngineScalarTypeIsSigned(TypeId) ? (INT64)Left >= (INT64)Right : Left >= Right; return TRUE;
+    case FUNC_ELT_TYPED: *Result = ScriptEngineScalarTypeIsSigned(TypeId) ? (INT64)Left <= (INT64)Right : Left <= Right; return TRUE;
+    case FUNC_EQUAL_TYPED: *Result = Left == Right; return TRUE;
+    case FUNC_NEQ_TYPED: *Result = Left != Right; return TRUE;
+    default: return FALSE;
+    }
+
+    *Result = ScriptEngineNormalizeInteger(*Result, TypeId);
+    return TRUE;
 }
 
 static BOOLEAN
@@ -901,6 +1164,11 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
     {
     case FUNC_TYPED_LOAD:
     {
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 4))
+        {
+            HasError = TRUE;
+            break;
+        }
         Src0 = CodeBuffer->Head + (*Indx)++;
         Src1 = CodeBuffer->Head + (*Indx)++;
         Src2 = CodeBuffer->Head + (*Indx)++;
@@ -919,6 +1187,11 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
 
     case FUNC_TYPED_STORE:
     {
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 4))
+        {
+            HasError = TRUE;
+            break;
+        }
         Src0 = CodeBuffer->Head + (*Indx)++;
         Src1 = CodeBuffer->Head + (*Indx)++;
         Src2 = CodeBuffer->Head + (*Indx)++;
@@ -937,6 +1210,11 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
     {
         BYTE ZeroBuffer[64] = {0};
         UINT64 Done = 0;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 3))
+        {
+            HasError = TRUE;
+            break;
+        }
         Src0 = CodeBuffer->Head + (*Indx)++;
         Src1 = CodeBuffer->Head + (*Indx)++;
         Src2 = CodeBuffer->Head + (*Indx)++;
@@ -958,6 +1236,11 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
         BYTE MovingBuffer[64];
         UINT64 Done = 0;
         BOOLEAN Backward;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 5))
+        {
+            HasError = TRUE;
+            break;
+        }
         Src0 = CodeBuffer->Head + (*Indx)++;
         Src1 = CodeBuffer->Head + (*Indx)++;
         Src2 = CodeBuffer->Head + (*Indx)++;
@@ -1282,6 +1565,12 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
 
     case FUNC_MEMCPY:
 
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 3))
+        {
+            HasError = TRUE;
+            break;
+        }
+
         Src0 = (PSYMBOL)((unsigned long long)CodeBuffer->Head +
                          (unsigned long long)(*Indx * sizeof(SYMBOL)));
 
@@ -1305,7 +1594,21 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
         SrcVal2 =
             GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src2, FALSE);
 
-        ScriptEngineFunctionMemcpy(SrcVal2, SrcVal1, (UINT32)SrcVal0, &HasError);
+        if (SrcVal0 == 0 || SrcVal0 > 0xffffffffULL)
+        {
+            HasError = TRUE;
+            break;
+        }
+
+        if (ScriptEngineTypedLocalRangeIsValid(ScriptGeneralRegisters, SrcVal2, (UINT32)SrcVal0) &&
+            ScriptEngineTypedLocalRangeIsValid(ScriptGeneralRegisters, SrcVal1, (UINT32)SrcVal0))
+        {
+            memmove((PVOID)SrcVal2, (PVOID)SrcVal1, (SIZE_T)SrcVal0);
+        }
+        else
+        {
+            ScriptEngineFunctionMemcpy(SrcVal2, SrcVal1, (UINT32)SrcVal0, &HasError);
+        }
 
         break;
 
@@ -2565,6 +2868,173 @@ ScriptEngineExecute(PGUEST_REGS                      GuestRegs,
             HasError = TRUE;
             break;
         }
+        SetValue(GuestRegs, ScriptGeneralRegisters, Des, DesVal);
+        break;
+    }
+
+    case FUNC_CAST_SCALAR:
+    {
+        UINT64 SourceType;
+        UINT64 DestinationType;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 4))
+        {
+            HasError = TRUE;
+            break;
+        }
+        Src0 = CodeBuffer->Head + (*Indx)++;
+        Des  = CodeBuffer->Head + (*Indx)++;
+        Src1 = CodeBuffer->Head + (*Indx)++;
+        Src2 = CodeBuffer->Head + (*Indx)++;
+        SourceType      = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src1, FALSE);
+        DestinationType = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src2, FALSE);
+
+        if ((ScriptEngineScalarTypeIsFloating(SourceType) ?
+                 !ScriptEngineFloatingSymbolIsReadable(ScriptGeneralRegisters, Src0) :
+                 Src0->Len != SYMBOL_VALUE_KIND_INTEGER) ||
+            (ScriptEngineScalarTypeIsFloating(DestinationType) ?
+                 !ScriptEngineFloatingSymbolIsWritable(ScriptGeneralRegisters, Des) :
+                 !ScriptEngineIntegerSymbolIsWritable(ScriptGeneralRegisters, Des)))
+        {
+            HasError = TRUE;
+            break;
+        }
+
+        SrcVal0 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src0, FALSE);
+        if (!ScriptEngineCastScalar(SrcVal0, SourceType, DestinationType, &DesVal))
+        {
+            HasError = TRUE;
+            break;
+        }
+        SetValue(GuestRegs, ScriptGeneralRegisters, Des, DesVal);
+        break;
+    }
+
+    case FUNC_ADD_TYPED:
+    case FUNC_SUB_TYPED:
+    case FUNC_MUL_TYPED:
+    case FUNC_DIV_TYPED:
+    case FUNC_MOD_TYPED:
+    case FUNC_BITWISE_AND_TYPED:
+    case FUNC_BITWISE_OR_TYPED:
+    case FUNC_BITWISE_XOR_TYPED:
+    case FUNC_SHIFT_LEFT_TYPED:
+    case FUNC_SHIFT_RIGHT_TYPED:
+    case FUNC_GT_TYPED:
+    case FUNC_LT_TYPED:
+    case FUNC_EGT_TYPED:
+    case FUNC_ELT_TYPED:
+    case FUNC_EQUAL_TYPED:
+    case FUNC_NEQ_TYPED:
+    {
+        UINT64 OperationType;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 4))
+        {
+            HasError = TRUE;
+            break;
+        }
+        Src0 = CodeBuffer->Head + (*Indx)++;
+        Src1 = CodeBuffer->Head + (*Indx)++;
+        Des  = CodeBuffer->Head + (*Indx)++;
+        Src2 = CodeBuffer->Head + (*Indx)++;
+        OperationType = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src2, FALSE);
+        if (Src0->Len != SYMBOL_VALUE_KIND_INTEGER || Src1->Len != SYMBOL_VALUE_KIND_INTEGER ||
+            !ScriptEngineIntegerSymbolIsWritable(ScriptGeneralRegisters, Des))
+        {
+            HasError = TRUE;
+            break;
+        }
+        SrcVal0 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src0, FALSE);
+        SrcVal1 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src1, FALSE);
+        if (!ScriptEngineExecuteTypedBinary(Operator->Value, SrcVal0, SrcVal1, OperationType, &DesVal))
+        {
+            HasError = TRUE;
+            break;
+        }
+        SetValue(GuestRegs, ScriptGeneralRegisters, Des, DesVal);
+        break;
+    }
+
+    case FUNC_NEG_TYPED:
+    case FUNC_BITWISE_NOT_TYPED:
+    case FUNC_LOGICAL_NOT_TYPED:
+    {
+        UINT64 OperationType;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 3))
+        {
+            HasError = TRUE;
+            break;
+        }
+        Src0 = CodeBuffer->Head + (*Indx)++;
+        Des  = CodeBuffer->Head + (*Indx)++;
+        Src1 = CodeBuffer->Head + (*Indx)++;
+        OperationType = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src1, FALSE);
+        if ((!ScriptEngineScalarTypeIsInteger(OperationType) && OperationType != SCRIPT_SCALAR_TYPE_POINTER &&
+             !(Operator->Value == FUNC_LOGICAL_NOT_TYPED && ScriptEngineScalarTypeIsFloating(OperationType))) ||
+            (ScriptEngineScalarTypeIsFloating(OperationType) ?
+                 !ScriptEngineFloatingSymbolIsReadable(ScriptGeneralRegisters, Src0) :
+                 Src0->Len != SYMBOL_VALUE_KIND_INTEGER) ||
+            !ScriptEngineIntegerSymbolIsWritable(ScriptGeneralRegisters, Des))
+        {
+            HasError = TRUE;
+            break;
+        }
+        SrcVal0 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src0, FALSE);
+        if (Operator->Value == FUNC_LOGICAL_NOT_TYPED)
+        {
+            if (OperationType == SCRIPT_SCALAR_TYPE_F32)
+                DesVal = (SrcVal0 & 0x7fffffffULL) == 0;
+            else if (OperationType == SCRIPT_SCALAR_TYPE_F64)
+                DesVal = (SrcVal0 & 0x7fffffffffffffffULL) == 0;
+            else
+                DesVal = SrcVal0 == 0;
+        }
+        else if (Operator->Value == FUNC_NEG_TYPED)
+            DesVal = ScriptEngineNormalizeInteger(0ULL - SrcVal0, OperationType);
+        else
+            DesVal = ScriptEngineNormalizeInteger(~SrcVal0, OperationType);
+        SetValue(GuestRegs, ScriptGeneralRegisters, Des, DesVal);
+        break;
+    }
+
+    case FUNC_POINTER_DIFF:
+    {
+        UINT64 ElementSize;
+        UINT64 Magnitude;
+        BOOLEAN Negative;
+        if (!ScriptEngineHasOperands(CodeBuffer, *Indx, 4))
+        {
+            HasError = TRUE;
+            break;
+        }
+        Src0 = CodeBuffer->Head + (*Indx)++;
+        Src1 = CodeBuffer->Head + (*Indx)++;
+        Des  = CodeBuffer->Head + (*Indx)++;
+        Src2 = CodeBuffer->Head + (*Indx)++;
+        ElementSize = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src2, FALSE);
+        if (!ElementSize || Src0->Len != SYMBOL_VALUE_KIND_INTEGER ||
+            Src1->Len != SYMBOL_VALUE_KIND_INTEGER ||
+            !ScriptEngineIntegerSymbolIsWritable(ScriptGeneralRegisters, Des))
+        {
+            HasError = TRUE;
+            break;
+        }
+        SrcVal0 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src0, FALSE);
+        SrcVal1 = GetValue(GuestRegs, ActionDetail, ScriptGeneralRegisters, Src1, FALSE);
+        Negative = SrcVal1 < SrcVal0;
+        Magnitude = Negative ? SrcVal0 - SrcVal1 : SrcVal1 - SrcVal0;
+        if (Magnitude % ElementSize)
+        {
+            HasError = TRUE;
+            break;
+        }
+        Magnitude /= ElementSize;
+        if ((!Negative && Magnitude > 0x7fffffffffffffffULL) ||
+            (Negative && Magnitude > 0x8000000000000000ULL))
+        {
+            HasError = TRUE;
+            break;
+        }
+        DesVal = Negative ? 0ULL - Magnitude : Magnitude;
         SetValue(GuestRegs, ScriptGeneralRegisters, Des, DesVal);
         break;
     }

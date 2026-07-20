@@ -78,6 +78,7 @@ typedef struct _SCRIPT_ENGINE_TOKEN
     unsigned long long       VariableMemoryIdx;
     unsigned int             AddressSpace;
     BOOLEAN                  IsAddress;
+    BOOLEAN                  IsImplicitType;
 } SCRIPT_ENGINE_TOKEN, *PSCRIPT_ENGINE_TOKEN;
 
 /**

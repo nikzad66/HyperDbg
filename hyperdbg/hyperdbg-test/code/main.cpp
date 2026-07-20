@@ -121,6 +121,18 @@ main(int argc, char * argv[])
             printf("\n[x] The script floating-point test cases failed\n");
         }
     }
+    else if (!strcmp(argv[1], TEST_CASE_PARAMETER_FOR_SCRIPT_VARIABLE_TYPES))
+    {
+        if (TestScriptEngineVariableTypes())
+        {
+            printf("\n[*] The script variable-type test cases passed successfully\n");
+            TestResult = TRUE;
+        }
+        else
+        {
+            printf("\n[x] The script variable-type test cases failed\n");
+        }
+    }
     else
     {
         printf("unknown test case\n");

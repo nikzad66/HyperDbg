@@ -16,6 +16,8 @@ namespace fs = std::filesystem;
 static std::mutex              SemanticOutputMutex;
 static std::condition_variable SemanticOutputChanged;
 static std::string             SemanticOutput;
+static std::set<UINT32>        ExpectedSemanticCases;
+static std::set<std::string>   ExpectedSemanticMarkers;
 
 static VOID
 CaptureSemanticOutput(CHAR * Message)
@@ -49,17 +51,20 @@ HasAllExpectedSemanticOutput(const std::string & Output)
         SuccessfulCases.insert((UINT32)std::stoul((*Match)[1].str()));
     }
 
-    return SuccessfulCases.size() == 83 &&
-           *SuccessfulCases.begin() == 0 &&
-           *SuccessfulCases.rbegin() == 82 &&
-           Output.find("floating point: 11.500000 0.500000 0.500000 11.000000 0.789000") != std::string::npos &&
-           Output.find("negative floating point: -11.500000 -0.500000 -0.789000 -0.000000") != std::string::npos &&
-           Output.find("runtime negative floating point: -0.789000") != std::string::npos &&
-           Output.find("runtime positive floating point: 0.500000") != std::string::npos &&
-           Output.find("floating arithmetic was successful") != std::string::npos &&
-           Output.find("floating arithmetic: 12.000000 11.000000 3.000000 3.000000") != std::string::npos &&
-           Output.find("double arithmetic: 1.000000 3.500000 5.000000 2.250000") != std::string::npos &&
-           Output.find("mixed and precedence: 1.750000 7.000000 -6.000000") != std::string::npos;
+    if (SuccessfulCases != ExpectedSemanticCases)
+    {
+        return FALSE;
+    }
+
+    for (const std::string & Marker : ExpectedSemanticMarkers)
+    {
+        if (Output.find(Marker) == std::string::npos)
+        {
+            return FALSE;
+        }
+    }
+
+    return !ExpectedSemanticCases.empty() || !ExpectedSemanticMarkers.empty();
 }
 
 static BOOLEAN
@@ -99,6 +104,12 @@ ReadDirectoryAndTestSemanticTestCases(const CHAR * ScriptSemanticPath)
             return FALSE;
         }
 
+        ExpectedSemanticCases.clear();
+        ExpectedSemanticMarkers.clear();
+
+        const std::regex CasePattern("test_case([0-9]+)[[:space:]]*=[[:space:]]*1");
+        const std::regex MarkerPattern("//[[:space:]]*semantic-test-marker:[[:space:]]*([^\\r\\n]+)");
+
         for (const auto & FilePath : TestFiles)
         {
             std::ifstream File(FilePath, std::ios::binary);
@@ -113,6 +124,28 @@ ReadDirectoryAndTestSemanticTestCases(const CHAR * ScriptSemanticPath)
             if (File.bad())
             {
                 std::cerr << "Could not read file: " << FilePath.string() << std::endl;
+                return FALSE;
+            }
+
+            BOOLEAN HasExpectation = FALSE;
+            for (std::sregex_iterator Match(Content.begin(), Content.end(), CasePattern), End;
+                 Match != End;
+                 ++Match)
+            {
+                ExpectedSemanticCases.insert((UINT32)std::stoul((*Match)[1].str()));
+                HasExpectation = TRUE;
+            }
+            for (std::sregex_iterator Match(Content.begin(), Content.end(), MarkerPattern), End;
+                 Match != End;
+                 ++Match)
+            {
+                ExpectedSemanticMarkers.insert((*Match)[1].str());
+                HasExpectation = TRUE;
+            }
+            if (!HasExpectation)
+            {
+                std::cerr << "Semantic file has no enabled numbered case or semantic-test-marker: "
+                          << FilePath.string() << std::endl;
                 return FALSE;
             }
 
