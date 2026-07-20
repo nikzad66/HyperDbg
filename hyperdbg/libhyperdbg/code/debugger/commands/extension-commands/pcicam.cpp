@@ -128,7 +128,7 @@ CommandPcicam(vector<CommandToken> CommandTokens, string Command)
         //
         // Send IOCTL
         //
-        Status = DeviceIoControl(
+        Status = PlatformDeviceIoControl(
             g_DeviceHandle,                                     // Handle to device
             IOCTL_PCIDEVINFO_ENUM,                              // IO Control Code (IOCTL)
             &PcidevinfoPacket,                                  // Input Buffer to driver.
@@ -142,7 +142,7 @@ CommandPcicam(vector<CommandToken> CommandTokens, string Command)
 
         if (!Status)
         {
-            ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+            ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
             return;
         }
 

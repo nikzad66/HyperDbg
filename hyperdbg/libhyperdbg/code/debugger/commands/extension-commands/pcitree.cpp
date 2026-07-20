@@ -70,7 +70,7 @@ CommandPcitree(vector<CommandToken> CommandTokens, string Command)
         //
         // Send IOCTL
         //
-        Status = DeviceIoControl(
+        Status = PlatformDeviceIoControl(
             g_DeviceHandle,                                  // Handle to device
             IOCTL_PCIE_ENDPOINT_ENUM,                        // IO Control Code (IOCTL)
             &PcitreePacket,                                  // Input Buffer to driver.
@@ -84,7 +84,7 @@ CommandPcitree(vector<CommandToken> CommandTokens, string Command)
 
         if (!Status)
         {
-            ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+            ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
             return;
         }
 

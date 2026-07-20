@@ -276,7 +276,7 @@ CommandOutput(vector<CommandToken> CommandTokens, string Command)
             return;
         }
 
-        RtlZeroMemory(EventForwardingObject, sizeof(DEBUGGER_EVENT_FORWARDING));
+        PlatformZeroMemory(EventForwardingObject, sizeof(DEBUGGER_EVENT_FORWARDING));
 
         //
         // Set the state
