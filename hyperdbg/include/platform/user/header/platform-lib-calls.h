@@ -124,6 +124,9 @@ typedef DWORD(WINAPI * PLATFORM_THREAD_ROUTINE)(PVOID Param);
 HANDLE
 PlatformCreateThread(PLATFORM_THREAD_ROUTINE Routine, PVOID Param);
 
+BOOLEAN
+PlatformTerminateThread(HANDLE Thread, DWORD ExitCode);
+
 //
 // LAST OS ERROR
 //

@@ -517,6 +517,47 @@ PlatformCreateThread(PLATFORM_THREAD_ROUTINE Routine, PVOID Param)
 }
 
 /**
+ * @brief Platform independent wrapper for TerminateThread
+ *
+ * @details There is no POSIX equivalent by design: no call forcibly kills a
+ *          thread without unwinding, since doing so never releases the
+ *          target's locks. pthread_cancel is the nearest primitive but has
+ *          different semantics (deferred by default, and glibc implements it
+ *          as a forced unwind that runs destructors and cleanup handlers).
+ *
+ *          TODO (linux): the only caller is disconnect.cpp, whose listening
+ *          thread blocks in recv() inside a
+ *          `while (g_IsConnectedToRemoteDebuggee)` loop and breaks on any
+ *          receive error. The correct teardown there is to clear the flag,
+ *          shutdown(fd, SHUT_RDWR) to kick the thread out of recv, then
+ *          pthread_join it — letting it exit through its own error path, with
+ *          no cancellation primitive involved. That needs a call-site reorder
+ *          (teardown before thread-kill, and SD_SEND -> SHUT_RDWR to wake a
+ *          blocked reader), which the port's no-logic-changes rule defers.
+ *
+ *          Returning TRUE is consistent with PlatformCreateThread, which
+ *          returns NULL on Linux — the thread is never started there, so
+ *          there is nothing to terminate yet.
+ *
+ * @param Thread handle to the thread to terminate
+ * @param ExitCode exit code for the terminated thread
+ * @return BOOLEAN TRUE on success
+ */
+BOOLEAN
+PlatformTerminateThread(HANDLE Thread, DWORD ExitCode)
+{
+#if defined(_WIN32)
+    return (BOOLEAN)TerminateThread(Thread, ExitCode);
+#elif defined(__linux__)
+    (void)Thread;
+    (void)ExitCode;
+    return TRUE;
+#else
+#    error "Unsupported platform"
+#endif
+}
+
+/**
  * @brief Platform independent wrapper for GetLastError
  */
 DWORD
