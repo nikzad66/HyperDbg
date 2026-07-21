@@ -391,7 +391,7 @@ ConvertStringToUInt32(string TextToConvert, PUINT32 Result)
         {
             try
             {
-                INT I   = std::stoi(TextToConvert);
+                UINT32 I   = std::stoul(TextToConvert);
                 *Result = I;
                 return TRUE;
             }
@@ -424,19 +424,41 @@ ConvertStringToUInt32(string TextToConvert, PUINT32 Result)
         }
         else
         {
-            //
-            // It's hex number
-            //
-            UINT32 TempResult;
-            TempResult = stoi(TextToConvert, nullptr, 16);
+            try
+            {
+                //
+                // It's hex number
+                //
+                UINT64 TempResult;
+                TempResult = stoul(TextToConvert, nullptr, 16);
+                
+                //
+                // in order to prevent buffer overflow, compare the user's value to 0xFFFFFFFF
+                //
+                if (TempResult > 0xFFFFFFFF)
+                {
+                    return FALSE;
+                }
+                //
+                // Apply the results
+                //
+                *Result = (UINT32)TempResult;
 
-            //
-            // Apply the results
-            //
-            *Result = TempResult;
+                return TRUE;
+            }
+            catch (std::invalid_argument const&)
+            {
+                return FALSE;
+            }
+            catch (std::out_of_range const&)
+            {
+                return FALSE;
+            }
 
-            return TRUE;
+            return FALSE;
+
         }
+        
     }
 }
 
