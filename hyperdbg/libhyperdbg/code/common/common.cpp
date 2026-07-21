@@ -12,7 +12,7 @@
 #include "pch.h"
 
 #ifdef __linux__
-#    include <sys/stat.h> // struct stat / stat() for IsFileExistA
+#    include <sys/stat.h>  // struct stat / stat() for IsFileExistA
 #    include <immintrin.h> // Intel TSX RTM intrinsics (_xbegin/_xend); requires -mrtm
 #endif
 
@@ -391,7 +391,7 @@ ConvertStringToUInt32(string TextToConvert, PUINT32 Result)
         {
             try
             {
-                UINT32 I   = std::stoul(TextToConvert);
+                INT I   = std::stoi(TextToConvert);
                 *Result = I;
                 return TRUE;
             }
@@ -424,41 +424,19 @@ ConvertStringToUInt32(string TextToConvert, PUINT32 Result)
         }
         else
         {
-            try
-            {
-                //
-                // It's hex number
-                //
-                UINT64 TempResult;
-                TempResult = stoul(TextToConvert, nullptr, 16);
-                
-                //
-                // in order to prevent buffer overflow, compare the user's value to 0xFFFFFFFF
-                //
-                if (TempResult > 0xFFFFFFFF)
-                {
-                    return FALSE;
-                }
-                //
-                // Apply the results
-                //
-                *Result = (UINT32)TempResult;
+            //
+            // It's hex number
+            //
+            UINT32 TempResult;
+            TempResult = stoi(TextToConvert, nullptr, 16);
 
-                return TRUE;
-            }
-            catch (std::invalid_argument const&)
-            {
-                return FALSE;
-            }
-            catch (std::out_of_range const&)
-            {
-                return FALSE;
-            }
+            //
+            // Apply the results
+            //
+            *Result = TempResult;
 
-            return FALSE;
-
+            return TRUE;
         }
-        
     }
 }
 

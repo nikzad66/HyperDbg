@@ -1,10 +1,9 @@
 /**
  * @file ucpuid.cpp
- * @author Sina Karvandi (sina@hyperdbg.org)
  * @author Nikzad (Hossein Shirdel)
  * @brief ucpuid command - reads and decodes USER specified CPUID information
  * @details
- * @version 0.1
+ * @version 0.23
  * @date 2026-06-18
  *
  * @copyright This project is released under the GNU Public License v3.
@@ -57,7 +56,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
     DEBUGGER_CPUID_REQUEST_RESPONSE CpuidRequest = {0};
     CpuidRequest.FunctionId                      = FunctionId;
     CpuidRequest.SubFunctionId                   = SubFunctionId;
-    
+
     if (g_IsSerialConnectedToRemoteDebuggee)
     {
         //
@@ -72,8 +71,6 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
         // It's on a local debugging mode
         //
         AssertShowMessageReturnStmt(g_IsKdModuleLoaded, g_DeviceHandle, ASSERT_MESSAGE_KD_NOT_LOADED, ASSERT_MESSAGE_DRIVER_NOT_LOADED, AssertReturn);
-        
-        
 
         //
         // By the way, we don't need to send an input buffer
@@ -92,7 +89,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
             &ReturnedLength,                        // Bytes placed in buffer.
             NULL                                    // synchronous call
         );
-        
+
         CONST CHAR * TypeName = NULL;
         CONST CHAR * AssocName;
 
@@ -137,31 +134,31 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                              "  *******************************************************\n\n");
 
                 ShowMessages("-- EAX: Version Information --\n\n");
-                ShowMessages("  SteppingId       = %u\n", 
+                ShowMessages("  SteppingId       = %u\n",
                              CPUID_VERSION_INFORMATION_STEPPING_ID(CpuidRequest.EAX));
-                ShowMessages("  Model            = %u\n", 
+                ShowMessages("  Model            = %u\n",
                              CPUID_VERSION_INFORMATION_MODEL(CpuidRequest.EAX));
-                ShowMessages("  FamilyId         = %u\n", 
+                ShowMessages("  FamilyId         = %u\n",
                              CPUID_VERSION_INFORMATION_FAMILY_ID(CpuidRequest.EAX));
-                ShowMessages("  ProcessorType    = %u\n", 
+                ShowMessages("  ProcessorType    = %u\n",
                              CPUID_VERSION_INFORMATION_PROCESSOR_TYPE(CpuidRequest.EAX));
-                ShowMessages("  ExtendedModelId  = %u\n", 
+                ShowMessages("  ExtendedModelId  = %u\n",
                              CPUID_VERSION_INFORMATION_EXTENDED_MODEL_ID(CpuidRequest.EAX));
-                ShowMessages("  ExtendedFamilyId = %u\n\n", 
+                ShowMessages("  ExtendedFamilyId = %u\n\n",
                              CPUID_VERSION_INFORMATION_EXTENDED_FAMILY_ID(CpuidRequest.EAX));
 
                 //
                 // EBX: additional information
                 //
                 ShowMessages("-- EBX: Additional Information --\n\n");
-                ShowMessages("  BrandIndex        = %u\n", 
+                ShowMessages("  BrandIndex        = %u\n",
                              CPUID_ADDITIONAL_INFORMATION_BRAND_INDEX(CpuidRequest.EBX));
-                ShowMessages("  ClflushLineSize   = %u (cache line = %u bytes)\n", 
+                ShowMessages("  ClflushLineSize   = %u (cache line = %u bytes)\n",
                              CPUID_ADDITIONAL_INFORMATION_CLFLUSH_LINE_SIZE(CpuidRequest.EBX),
                              CPUID_ADDITIONAL_INFORMATION_CLFLUSH_LINE_SIZE(CpuidRequest.EBX) * 8);
-                ShowMessages("  MaxAddressableIds = %u\n", 
+                ShowMessages("  MaxAddressableIds = %u\n",
                              CPUID_ADDITIONAL_INFORMATION_MAX_ADDRESSABLE_IDS(CpuidRequest.EBX));
-                ShowMessages("  InitialApicId     = %u\n\n", 
+                ShowMessages("  InitialApicId     = %u\n\n",
                              CPUID_ADDITIONAL_INFORMATION_INITIAL_APIC_ID(CpuidRequest.EBX));
 
                 //
@@ -318,14 +315,14 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
 
             case 0x4:
             {
-                UINT32 LineSize        = CPUID_EBX_SYSTEM_COHERENCY_LINE_SIZE(CpuidRequest.EBX);
-                UINT32 Partitions       = CPUID_EBX_PHYSICAL_LINE_PARTITIONS(CpuidRequest.EBX);
-                UINT32 Ways             = CPUID_EBX_WAYS_OF_ASSOCIATIVITY(CpuidRequest.EBX);
-                UINT32 Sets             = CPUID_ECX_NUMBER_OF_SETS(CpuidRequest.ECX);
+                UINT32 LineSize       = CPUID_EBX_SYSTEM_COHERENCY_LINE_SIZE(CpuidRequest.EBX);
+                UINT32 Partitions     = CPUID_EBX_PHYSICAL_LINE_PARTITIONS(CpuidRequest.EBX);
+                UINT32 Ways           = CPUID_EBX_WAYS_OF_ASSOCIATIVITY(CpuidRequest.EBX);
+                UINT32 Sets           = CPUID_ECX_NUMBER_OF_SETS(CpuidRequest.ECX);
                 UINT64 CacheSizeBytes = (UINT64)(Ways + 1) *
-                                          (UINT64)(Partitions + 1) *
-                                          (UINT64)(LineSize + 1) *
-                                          (UINT64)(Sets + 1);
+                                        (UINT64)(Partitions + 1) *
+                                        (UINT64)(LineSize + 1) *
+                                        (UINT64)(Sets + 1);
                 ShowMessages("==== CPUID.(EAX=04H) Deterministic Cache Parameters ====\n\n");
 
                 ShowMessages("  *******************************************************\n"
@@ -491,43 +488,43 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 // EAX
                 //
                 ShowMessages("-- EAX --\n\n");
-                ShowMessages("  TemperatureSensorSupported              = %s\n", 
+                ShowMessages("  TemperatureSensorSupported              = %s\n",
                              CPUID_EAX_TEMPERATURE_SENSOR_SUPPORTED(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  IntelTurboBoostTechnologyAvailable       = %s\n", 
+                ShowMessages("  IntelTurboBoostTechnologyAvailable       = %s\n",
                              CPUID_EAX_INTEL_TURBO_BOOST_TECHNOLOGY_AVAILABLE(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  ARAT (ApicTimerAlwaysRunning)            = %s\n", 
+                ShowMessages("  ARAT (ApicTimerAlwaysRunning)            = %s\n",
                              CPUID_EAX_APIC_TIMER_ALWAYS_RUNNING(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  PLN (PowerLimitNotification)             = %s\n", 
+                ShowMessages("  PLN (PowerLimitNotification)             = %s\n",
                              CPUID_EAX_POWER_LIMIT_NOTIFICATION(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  ECMD (ClockModulationDuty)               = %s\n", 
+                ShowMessages("  ECMD (ClockModulationDuty)               = %s\n",
                              CPUID_EAX_CLOCK_MODULATION_DUTY(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  PTM (PackageThermalManagement)           = %s\n", 
+                ShowMessages("  PTM (PackageThermalManagement)           = %s\n",
                              CPUID_EAX_PACKAGE_THERMAL_MANAGEMENT(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP Base Registers                       = %s\n", 
+                ShowMessages("  HWP Base Registers                       = %s\n",
                              CPUID_EAX_HWP_BASE_REGISTERS(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP_Notification                         = %s\n", 
+                ShowMessages("  HWP_Notification                         = %s\n",
                              CPUID_EAX_HWP_NOTIFICATION(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP_Activity_Window                      = %s\n", 
+                ShowMessages("  HWP_Activity_Window                      = %s\n",
                              CPUID_EAX_HWP_ACTIVITY_WINDOW(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP_Energy_Performance_Preference        = %s\n", 
+                ShowMessages("  HWP_Energy_Performance_Preference        = %s\n",
                              CPUID_EAX_HWP_ENERGY_PERFORMANCE_PREFERENCE(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP_Package_Level_Request                = %s\n", 
+                ShowMessages("  HWP_Package_Level_Request                = %s\n",
                              CPUID_EAX_HWP_PACKAGE_LEVEL_REQUEST(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HDC                                      = %s\n", 
+                ShowMessages("  HDC                                      = %s\n",
                              CPUID_EAX_HDC(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  Intel Turbo Boost Max Technology 3.0     = %s\n", 
+                ShowMessages("  Intel Turbo Boost Max Technology 3.0     = %s\n",
                              CPUID_EAX_INTEL_TURBO_BOOST_MAX_TECHNOLOGY_3_AVAILABLE(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP Capabilities                         = %s\n", 
+                ShowMessages("  HWP Capabilities                         = %s\n",
                              CPUID_EAX_HWP_CAPABILITIES(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  HWP PECI Override                        = %s\n", 
+                ShowMessages("  HWP PECI Override                        = %s\n",
                              CPUID_EAX_HWP_PECI_OVERRIDE(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  Flexible HWP                             = %s\n", 
+                ShowMessages("  Flexible HWP                             = %s\n",
                              CPUID_EAX_FLEXIBLE_HWP(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  Fast Access Mode for HWP Request MSR     = %s\n", 
+                ShowMessages("  Fast Access Mode for HWP Request MSR     = %s\n",
                              CPUID_EAX_FAST_ACCESS_MODE_FOR_HWP_REQUEST_MSR(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  Ignoring Idle Logical Proc HWP Request   = %s\n", 
+                ShowMessages("  Ignoring Idle Logical Proc HWP Request   = %s\n",
                              CPUID_EAX_IGNORING_IDLE_LOGICAL_PROCESSOR_HWP_REQUEST(CpuidRequest.EAX) ? "TRUE" : "FALSE");
-                ShowMessages("  Intel Thread Director                    = %s\n\n", 
+                ShowMessages("  Intel Thread Director                    = %s\n\n",
                              CPUID_EAX_INTEL_THREAD_DIRECTOR(CpuidRequest.EAX) ? "TRUE" : "FALSE");
 
                 //
@@ -735,7 +732,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                     //
                     ShowMessages("  VersionId = 0 -> architectural performance monitoring not supported;\n"
                                  "  remaining fields in this leaf are not architecturally defined.\n\n");
-                    
+
                     break;
                 }
 
@@ -743,13 +740,13 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 // EAX
                 //
                 ShowMessages("-- EAX --\n\n");
-                ShowMessages("  VersionId                               = %u\n", 
+                ShowMessages("  VersionId                               = %u\n",
                              CPUID_EAX_VERSION_ID_OF_ARCHITECTURAL_PERFORMANCE_MONITORING(CpuidRequest.EAX));
                 ShowMessages("  NumberOfCountersPerLogicalProcessor     = %u\n",
                              CPUID_EAX_NUMBER_OF_PERFORMANCE_MONITORING_COUNTER_PER_LOGICAL_PROCESSOR(CpuidRequest.EAX));
                 ShowMessages("  BitWidthOfPerformanceMonitoringCounter  = %u\n",
                              CPUID_EAX_BIT_WIDTH_OF_PERFORMANCE_MONITORING_COUNTER(CpuidRequest.EAX));
-                ShowMessages("  EbxBitVectorLength                      = %u\n\n", 
+                ShowMessages("  EbxBitVectorLength                      = %u\n\n",
                              CPUID_EAX_EBX_BIT_VECTOR_LENGTH(CpuidRequest.EAX));
 
                 //
@@ -782,7 +779,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 // ECX
                 //
                 ShowMessages("-- ECX --\n\n");
-                ShowMessages("  Reserved                                   = 0x%08X\n\n", 
+                ShowMessages("  Reserved                                   = 0x%08X\n\n",
                              CPUID_ECX_RESERVED(CpuidRequest.ECX));
 
                 //
@@ -870,7 +867,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 ShowMessages("-- EBX --\n\n");
                 ShowMessages("  NumberOfLogicalProcessorsAtThisLevelType = %u (DIAGNOSTIC ONLY - do not use for topology enumeration)\n\n",
                              CPUID_EBX_NUMBER_OF_LOGICAL_PROCESSORS_AT_THIS_LEVEL_TYPE(CpuidRequest.EBX));
-                
+
                 //
                 // EDX: x2APIC ID (constant across all sub-leaves)
                 //
@@ -1126,7 +1123,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                                  CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidRequest.EDX),
                                  CPUID_EDX_HIGHEST_COS_NUMBER_SUPPORTED(CpuidRequest.EDX) + 1);
                 }
-                
+
                 else
                 {
                     ShowMessages("  Sub-leaf %u is NOT supported on this CPU\n", SubFunctionId);
@@ -1136,7 +1133,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                                  CpuidRequest.ECX,
                                  CpuidRequest.EDX);
                 }
-                
+
                 break;
 
             case 0x11:
@@ -1307,8 +1304,8 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                         //
                         // Unknown subleaf type (reserved)
                         //
-                        ShowMessages("-- Raw Data for Sub-leaf %u (Type %u) --\n\n", 
-                                     SubFunctionId, 
+                        ShowMessages("-- Raw Data for Sub-leaf %u (Type %u) --\n\n",
+                                     SubFunctionId,
                                      CPUID_EAX_SUB_LEAF_TYPE(CpuidRequest.EAX));
 
                         ShowMessages("  EAX = 0x%08X\n", CpuidRequest.EAX);
@@ -1320,7 +1317,6 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 }
 
                 break;
-
             }
 
             case 0x13:
@@ -1413,7 +1409,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                     ShowMessages("  Reserved = 0x%08X\n\n",
                                  CPUID_EDX_RESERVED(CpuidRequest.EDX));
                 }
-                
+
                 else
                 {
                     //
@@ -1485,7 +1481,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 {
                     ShowMessages("  TSC ratio not enumerated (denominator or numerator is 0)\n\n");
                 }
-                
+
                 else
                 {
                     ShowMessages("  TSC / Core Crystal Clock ratio = %u / %u\n",
@@ -1700,7 +1696,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                                  (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidRequest.EDX) >> 16) & 0xFF,
                                  (CPUID_EDX_SOC_VENDOR_BRAND_STRING(CpuidRequest.EDX) >> 24) & 0xFF);
                 }
-                
+
                 else
                 {
                     //
@@ -1801,7 +1797,6 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                     ShowMessages("  MaxAddressableIdsForLogicalProcessors (raw) = %u -> actual = %u (raw + 1)\n",
                                  CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidRequest.EDX),
                                  CPUID_EDX_MAX_ADDRESSABLE_IDS_FOR_LOGICAL_PROCESSORS(CpuidRequest.EDX) + 1);
-                
                 }
 
                 else
@@ -1829,8 +1824,8 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                         // EAX: Reserved for sub-leaves >= 1
                         //
                         ShowMessages("-- EAX --\n\n");
-                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidRequest.EAX));                 
-                        
+                        ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidRequest.EAX));
+
                         //
                         // EBX: Page size support and associativity
                         //
@@ -1894,15 +1889,15 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
             case 0x80000000:
                 ShowMessages("==== CPUID.(EAX=80000000H) Extended Function Information ====\n\n");
                 ShowMessages("  *******************************************************\n"
-                                "  *           LEAF 0x80000000 HAS NO SUBLEAVES          *\n"
-                                "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
-                                "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
-                                "  *******************************************************\n\n");
+                             "  *           LEAF 0x80000000 HAS NO SUBLEAVES          *\n"
+                             "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                             "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                             "  *******************************************************\n\n");
 
                 ShowMessages("-- EAX --\n\n");
                 ShowMessages("  MaxExtendedFunctions = 0x%08X (%u)\n\n",
-                                CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidRequest.EAX),
-                                CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidRequest.EAX));
+                             CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidRequest.EAX),
+                             CPUID_EAX_MAX_EXTENDED_FUNCTIONS(CpuidRequest.EAX));
 
                 ShowMessages("-- EBX --\n\n");
                 ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EBX_RESERVED(CpuidRequest.EBX));
@@ -1912,16 +1907,16 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
 
                 ShowMessages("-- EDX --\n\n");
                 ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidRequest.EDX));
-                    
+
                 break;
 
             case 0x80000001:
                 ShowMessages("==== CPUID.(EAX=80000001H) Extended CPU Signature ====\n\n");
                 ShowMessages("  *******************************************************\n"
-                                "  *           LEAF 0x80000001 HAS NO SUBLEAVES          *\n"
-                                "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
-                                "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
-                                "  *******************************************************\n\n");
+                             "  *           LEAF 0x80000001 HAS NO SUBLEAVES          *\n"
+                             "  *       ANY SUBLEAF YOU ENTER WILL DEFAULT TO 0       *\n"
+                             "  *      AND THE PROCESSOR RETURNS UNDEFINED VALUES     *\n"
+                             "  *******************************************************\n\n");
 
                 ShowMessages("-- EAX --\n\n");
                 ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EAX_RESERVED(CpuidRequest.EAX));
@@ -1931,23 +1926,23 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
 
                 ShowMessages("-- ECX --\n\n");
                 ShowMessages("  LAHF/SAHF Available in 64-bit Mode = %s\n",
-                                CPUID_ECX_LAHF_SAHF_AVAILABLE_IN_64_BIT_MODE(CpuidRequest.ECX) ? "True" : "False");
+                             CPUID_ECX_LAHF_SAHF_AVAILABLE_IN_64_BIT_MODE(CpuidRequest.ECX) ? "True" : "False");
                 ShowMessages("  LZCNT                              = %s\n",
-                                CPUID_ECX_LZCNT(CpuidRequest.ECX) ? "True" : "False");
+                             CPUID_ECX_LZCNT(CpuidRequest.ECX) ? "True" : "False");
                 ShowMessages("  PREFETCHW                          = %s\n\n",
-                                CPUID_ECX_PREFETCHW(CpuidRequest.ECX) ? "True" : "False");
+                             CPUID_ECX_PREFETCHW(CpuidRequest.ECX) ? "True" : "False");
 
                 ShowMessages("-- EDX --\n\n");
                 ShowMessages("  SYSCALL/SYSRET Available in 64-bit Mode = %s\n",
-                                CPUID_EDX_SYSCALL_SYSRET_AVAILABLE_IN_64_BIT_MODE(CpuidRequest.EDX) ? "True" : "False");
+                             CPUID_EDX_SYSCALL_SYSRET_AVAILABLE_IN_64_BIT_MODE(CpuidRequest.EDX) ? "True" : "False");
                 ShowMessages("  Execute Disable Bit Available            = %s\n",
-                                CPUID_EDX_EXECUTE_DISABLE_BIT_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
+                             CPUID_EDX_EXECUTE_DISABLE_BIT_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
                 ShowMessages("  1-GByte Pages Available                 = %s\n",
-                                CPUID_EDX_PAGES_1GB_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
+                             CPUID_EDX_PAGES_1GB_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
                 ShowMessages("  RDTSCP Available                        = %s\n",
-                                CPUID_EDX_RDTSCP_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
+                             CPUID_EDX_RDTSCP_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
                 ShowMessages("  Intel 64 Architecture Available         = %s\n\n",
-                                CPUID_EDX_IA64_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
+                             CPUID_EDX_IA64_AVAILABLE(CpuidRequest.EDX) ? "True" : "False");
 
                 break;
             //
@@ -1966,7 +1961,6 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 ShowMessages("  Brand String = \"%s\"\n\n", CpuidRequest.BrandString);
 
                 break;
-
             }
             case 0x80000005:
                 ShowMessages("EAX = 0x80000005: not implemented.\n");
@@ -2033,9 +2027,8 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 ShowMessages("  Reserved = 0x%08X\n\n", CPUID_EDX_RESERVED(CpuidRequest.EDX));
 
                 break;
-
             }
-            
+
             case 0x80000007:
                 ShowMessages("==== CPUID.(EAX=80000007H) Extended Time Stamp Counter ====\n\n");
                 ShowMessages("  *******************************************************\n"
@@ -2104,7 +2097,7 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
                 ShowMessages("    EDX: 0x%08X\n\n", CpuidRequest.EDX);
             }
         }
-        
+
         else
         {
             ShowMessages("Receiving CPUID result was not successful :(\n");
