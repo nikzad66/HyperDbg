@@ -108,7 +108,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
     //
     // Send the request to the kernel
     //
-    Status = DeviceIoControl(
+    Status = PlatformDeviceIoControl(
         g_DeviceHandle,                         // Handle to device
         IOCTL_GET_USER_MODE_MODULE_DETAILS,     // IO Control
                                                 // code
@@ -123,7 +123,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
 
     if (!Status)
     {
-        ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+        ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
         return FALSE;
     }
 
@@ -146,7 +146,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
             return FALSE;
         }
 
-        RtlZeroMemory(ModuleDetailsRequest, ModuleDetailsSize);
+        PlatformZeroMemory(ModuleDetailsRequest, ModuleDetailsSize);
 
         //
         // Set the module details to get the modules (not count)
@@ -157,7 +157,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
         //
         // Send the request to the kernel
         //
-        Status = DeviceIoControl(
+        Status = PlatformDeviceIoControl(
             g_DeviceHandle,                         // Handle to device
             IOCTL_GET_USER_MODE_MODULE_DETAILS,     // IO Control
                                                     // code
@@ -173,7 +173,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
         if (!Status)
         {
             free(ModuleDetailsRequest);
-            ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+            ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
             return FALSE;
         }
 
@@ -197,7 +197,7 @@ CommandLmShowUserModeModule(UINT32 ProcessId, const CHAR * SearchModule)
                     return FALSE;
                 }
 
-                RtlZeroMemory(WcharBuff, CharSize);
+                PlatformZeroMemory(WcharBuff, CharSize);
 
                 mbstowcs(WcharBuff, SearchModule, CharSize);
 
@@ -483,7 +483,7 @@ CommandLm(vector<CommandToken> CommandTokens, string Command)
         }
         else
         {
-            CommandLmShowUserModeModule(GetCurrentProcessId(), SearchString);
+            CommandLmShowUserModeModule(PlatformGetCurrentProcessId(), SearchString);
         }
     }
 

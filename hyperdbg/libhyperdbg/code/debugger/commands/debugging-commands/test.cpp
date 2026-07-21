@@ -61,7 +61,7 @@ CommandTestPerformKernelTestsIoctl()
     // want to pass some other arguments to the kernel in
     // the future
     //
-    Status = DeviceIoControl(
+    Status = PlatformDeviceIoControl(
         g_DeviceHandle,                       // Handle to device
         IOCTL_PERFORM_KERNEL_SIDE_TESTS,      // IO Control Code (IOCTL)
         &KernelTestRequest,                   // Input Buffer to driver.
@@ -75,7 +75,7 @@ CommandTestPerformKernelTestsIoctl()
 
     if (!Status)
     {
-        ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+        ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
         return FALSE;
     }
 
@@ -204,7 +204,7 @@ CommandTestPerformTest()
         return FALSE;
     }
 
-    RtlZeroMemory(Buffer, TEST_CASE_MAXIMUM_BUFFERS_TO_COMMUNICATE);
+    PlatformZeroMemory(Buffer, TEST_CASE_MAXIMUM_BUFFERS_TO_COMMUNICATE);
 
     //
     // Create tests process to create a thread for us
@@ -245,7 +245,7 @@ SendCommandAndWaitForResponse:
         return FALSE;
     }
 
-    RtlZeroMemory(Buffer, TEST_CASE_MAXIMUM_BUFFERS_TO_COMMUNICATE);
+    PlatformZeroMemory(Buffer, TEST_CASE_MAXIMUM_BUFFERS_TO_COMMUNICATE);
     ReadBytes =
         NamedPipeServerReadClientMessage(PipeHandle, (CHAR *)Buffer, TEST_CASE_MAXIMUM_BUFFERS_TO_COMMUNICATE);
 

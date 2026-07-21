@@ -86,7 +86,7 @@ CommandLbrSendRequest(HYPERTRACE_LBR_OPERATION_PACKETS * LbrRequest)
     //
     // Send IOCTL
     //
-    Status = DeviceIoControl(
+    Status = PlatformDeviceIoControl(
         g_DeviceHandle,                          // Handle to device
         IOCTL_PERFORM_HYPERTRACE_LBR_OPERATION,  // IO Control Code (IOCTL)
         LbrRequest,                              // Input Buffer to driver.
@@ -99,7 +99,7 @@ CommandLbrSendRequest(HYPERTRACE_LBR_OPERATION_PACKETS * LbrRequest)
 
     if (!Status)
     {
-        ShowMessages("ioctl failed with code 0x%x\n", GetLastError());
+        ShowMessages("ioctl failed with code 0x%x\n", PlatformGetLastError());
 
         return FALSE;
     }

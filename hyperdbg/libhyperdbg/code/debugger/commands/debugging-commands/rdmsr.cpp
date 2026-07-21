@@ -76,7 +76,7 @@ GetWindowsNumaNumberOfCores()
     }
 
     GetLogicalProcessorInformationEx(RelationAll, NULL, &Length);
-    if (Length < 1 || GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+    if (Length < 1 || PlatformGetLastError() != ERROR_INSUFFICIENT_BUFFER)
     {
         return 0;
     }
@@ -205,9 +205,9 @@ CommandRdmsr(vector<CommandToken> CommandTokens, string Command)
     //
     UINT64 * OutputBuffer = (UINT64 *)malloc(sizeof(UINT64) * NumCPU);
 
-    ZeroMemory(OutputBuffer, sizeof(UINT64) * NumCPU);
+    PlatformZeroMemory(OutputBuffer, sizeof(UINT64) * NumCPU);
 
-    Status = DeviceIoControl(
+    Status = PlatformDeviceIoControl(
         g_DeviceHandle,                        // Handle to device
         IOCTL_DEBUGGER_READ_OR_WRITE_MSR,      // IO Control Code (IOCTL)
         &MsrReadRequest,                       // Input Buffer to driver.
@@ -221,7 +221,7 @@ CommandRdmsr(vector<CommandToken> CommandTokens, string Command)
     if (!Status)
     {
         ShowMessages("ioctl failed with code (%x), either msr index or core id is invalid\n",
-                     GetLastError());
+                     PlatformGetLastError());
         free(OutputBuffer);
         return;
     }

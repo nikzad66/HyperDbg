@@ -196,3 +196,13 @@ if(UNIX)
 endif()
 
 add_library(libhyperdbg SHARED ${SourceFiles})
+
+if(UNIX)
+    #
+    # Enable the Intel TSX/RTM intrinsics (_xbegin/_xend/_XBEGIN_STARTED) used by
+    # CheckAddressValidityUsingTsx() in common.cpp. GCC gates these behind -mrtm.
+    # Harmless when unused: no RTM instructions are emitted unless the intrinsics
+    # are actually called.
+    #
+    target_compile_options(libhyperdbg PRIVATE -mrtm)
+endif()

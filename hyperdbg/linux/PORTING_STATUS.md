@@ -123,6 +123,32 @@ equivalent, behavior-preserving.
   wait/read via `PlatformSerial*`, `DebugBreak`→`PlatformDebugBreak`.
 - `readmem.cpp` — `ZeroMemory` / `DeviceIoControl` / `GetLastError` sweep.
 
+### common
+- `common.cpp` — multi-category port:
+  - `_stricmp`→`PlatformStrCaseCmp` (new wrapper, see platform-lib-calls).
+  - `CpuIdEx`→`CpuCpuIdEx`. **This also fixes an upstream typo, not just a Linux
+    shim.** Commit `85843494` ("add CPU intrinsics for user mode") swept the MSVC
+    intrinsics onto the new `Cpu*` wrappers but wrote `CpuIdEx` where the wrapper is
+    actually named `CpuCpuIdEx` (cf. `__cpuid`→`CpuCpuId` done correctly alongside).
+    `CpuIdEx` is defined **nowhere** in the tree, so this line does not compile on
+    Windows either — it was just never rebuilt there. Same bug also hit
+    `cpu.cpp:148` / `cpu.cpp:200` — **now fixed there too** (user-confirmed the swap);
+    still present on `master`.
+  - `IsFileExistA` — kept as-is (POSIX `struct stat`/`stat()`); added `#include
+    <sys/stat.h>` under `__linux__`.
+  - Whole Windows-only bodies guarded `#ifdef _WIN32` with a Linux stub + TODO:
+    `SetPrivilege` (token/LUID; no Linux callers → returns FALSE),
+    `IsFileExistW` (`_wstat`; wide-char deferred → FALSE),
+    `GetConfigFilePath` (`GetModuleFileNameW`/shlwapi; wide-char deferred → empties path),
+    `ListDirectory` (`FindFirstFileA`; → empty vector, only caller is eval.cpp test harness).
+  - `CheckAddressValidityUsingTsx` — TSX `_xbegin`/`_xend`/`_XBEGIN_STARTED` kept
+    verbatim; they resolve on GCC via `<immintrin.h>` (included under `__linux__`)
+    once `-mrtm` is set. Added `target_compile_options(libhyperdbg PRIVATE -mrtm)`
+    in `libhyperdbg/CMakeLists.txt` (UNIX block). Real 1:1 mapping, not a stub — the
+    path is gated by `g_RtmSupport`, which is live on Linux now that cpuid works.
+- `platform-lib-calls.{h,c}` — added `PlatformStrCaseCmp(Str1, Str2)`: Windows
+  `_stricmp`; Linux `strcasecmp` (added `<strings.h>` to the Linux includes).
+
 ### Core debugger
 - `debugger.cpp` — `DeviceIoControl` / `GetLastError` / `RtlZeroMemory` sweep;
   `DebuggerGetNtoskrnlBase` body guarded `#ifdef _WIN32` (Linux returns NULL).
@@ -203,6 +229,36 @@ equivalent, behavior-preserving.
   `spinlock.cpp` (`_interlockedbittestandset`→`CpuInterlockedBitTestAndSet`).
   (`libhyperdbg.cpp` itself has its own entry under **App** above.)
 
+### Commands batch sweep — DONE (2026-07-20)
+
+Mechanical bucket-1 sweep across 23 files in `libhyperdbg/code/debugger/commands/`.
+Behaviour-preserving 1:1 substitutions only, no logic touched:
+
+| Swap | Count |
+|------|-------|
+| `DeviceIoControl` → `PlatformDeviceIoControl` | 19 |
+| `GetLastError` → `PlatformGetLastError` | 20 |
+| `RtlZeroMemory` / `ZeroMemory` → `PlatformZeroMemory` | 15 |
+| `GetCurrentProcessId` → `PlatformGetCurrentProcessId` | 7 |
+| `CloseHandle` → `PlatformCloseHandle` | 2 |
+| `TerminateThread` → `PlatformTerminateThread` | 1 |
+
+- Debugging: `flush.cpp`, `lm.cpp`, `load.cpp`, `output.cpp`, `rdmsr.cpp`, `s.cpp`,
+  `test.cpp`, `wrmsr.cpp`
+- Extension: `apic.cpp`, `hide.cpp`, `idt.cpp`, `ioapic.cpp`, `lbr.cpp`,
+  `lbrdump.cpp`, `pa2va.cpp`, `pcicam.cpp`, `pcitree.cpp`, `pte.cpp`, `smi.cpp`,
+  `unhide.cpp`, `va2pa.cpp`
+- Meta: `sym.cpp`, `disconnect.cpp`
+
+**Pure addition:** `PlatformTerminateThread` in `platform-lib-calls.{h,c}` — real
+`TerminateThread` on Windows, Linux stub returning TRUE (see TODO below).
+
+After this sweep `pt.cpp` is the only file left in `commands/` holding raw Win32
+calls. Note `lm.cpp` still does not compile, but for unrelated pre-existing
+reasons (`RTL_PROCESS_MODULES` / `RTL_PROCESS_MODULE_INFORMATION` undeclared, and
+`WCHAR *` vs `wchar_t *` — the wide-char item below); none of those are on lines
+this sweep touched.
+
 ---
 
 ## TODO ledger — revisit before Linux is functional
@@ -254,11 +310,69 @@ Bucket 2 (Win32 process/thread mgmt) resolved two ways (user decision):
 TODO(Linux) still open in the wrapper bodies: real `fork`+`execve`/`ptrace` process
 backend, and the Toolhelp thread-enumeration equivalent (`/proc`) — all stubbed for now.
 
+### Process control — `pt.cpp` NOT STARTED
+
+`extension-commands/pt.cpp` (Intel PT) is the last file in `commands/` with raw
+Win32 calls — 27 sites, and no `#ifdef` guards anywhere in the file. This is
+**not** a mechanical sweep: it is bucket-2 work structurally like `ud.cpp` was, so
+it needs the same Group A / Group B decision per call site before anything is
+swapped. What is in there:
+
+- Toolhelp process/thread snapshot walk (`CreateToolhelp32Snapshot` + enumeration)
+- `OpenProcess` / `OpenThread` + handle lifetime (`CloseHandle` ×8)
+- Thread affinity pinning (`SetThreadAffinityMask`)
+- Trace-thread lifecycle (`CreateEvent` / `CreateThread` / stop-event signalling)
+- Two `DeviceIoControl` + `GetLastError` pairs (these two *are* bucket-1 and could
+  be swapped in isolation, but leaving the file wholly untouched is cleaner than a
+  half-ported file)
+
+- [ ] Decide Group A vs Group B per call site, then port `pt.cpp`.
+
+### `PlatformTerminateThread` — Linux stub
+
+- [ ] Real teardown for the remote-debuggee listening thread.
+
+There is **no POSIX equivalent to `TerminateThread` by design**: nothing forcibly
+kills a thread without unwinding, because doing so never releases the target's
+locks. `pthread_cancel` is the nearest primitive but differs semantically —
+deferred by default, and glibc implements it as a forced unwind that runs
+destructors and cleanup handlers (any `catch (...)` that does not rethrow breaks
+it). `PTHREAD_CANCEL_ASYNCHRONOUS` recovers the abruptness at the cost of
+undefined behaviour for anything not async-cancel-safe.
+
+The only caller does not need a cancellation primitive at all.
+`RemoteConnectionThreadListeningToDebuggee` (`remote-connection.cpp:211`) is a
+`while (g_IsConnectedToRemoteDebuggee)` loop that blocks in `recv()` and `break`s
+on any receive error. Correct Linux teardown is therefore: clear the flag →
+`shutdown(fd, SHUT_RDWR)` to kick the thread out of `recv` → `pthread_join`. It
+exits through its own existing error path.
+
+Deferred because that requires a **call-site reorder** in `disconnect.cpp`
+(teardown before thread-kill instead of after) plus `SD_SEND` → `SHUT_RDWR` in
+`CommunicationClientShutdownConnection` to wake a blocked *reader* — a behaviour
+change to shared logic, which the no-logic-changes rule rules out mid-port.
+
+Also blocked on `PlatformCreateThread`, which returns NULL on Linux, so the
+listening thread never starts there in the first place.
+
+**Observation, not this batch's job:** on Windows the current ordering kills the
+listener while it may be mid-`recv` holding the socket, and only *then* shuts the
+socket down. That looks like a latent upstream bug — worth raising separately,
+but out of scope for the port.
+
 ### Misc runtime stubs
 - [ ] `PlatformGetOsVersion` — Linux returns FALSE; implement via `uname`.
 - [ ] `$peb` pseudo-register — returns 0 on Linux (PEB is NT-only).
 - [ ] `DebuggerGetNtoskrnlBase` — returns NULL on Linux (NT system-module enum).
 - [ ] File I/O / user-debugger paths — stubbed (also blocked on wide-char above).
+- [ ] `common.cpp::ListDirectory` — Linux returns empty vector; reimplement with
+  `opendir`/`readdir` + `fnmatch` (only caller today is eval.cpp's test harness).
+- [ ] `common.cpp::GetConfigFilePath` — Linux empties the path; resolve via
+  `readlink("/proc/self/exe")` + append `CONFIG_FILE_NAME` (also blocked on wide-char).
+- [ ] `common.cpp::SetPrivilege` / `IsFileExistW` — Linux stubs (no callers /
+  wide-char deferred respectively).
+- [x] `cpu.cpp:148` & `cpu.cpp:200` — same `CpuIdEx`→`CpuCpuIdEx` typo fix as
+  common.cpp. Done.
 
 ### Build system
 - [ ] Add `.gitignore` rules for the in-source CMake build output
