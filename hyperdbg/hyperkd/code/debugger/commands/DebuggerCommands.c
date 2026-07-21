@@ -14,13 +14,13 @@
 
 /**
  * @brief read registers
- * @param CpuidRegs
+ * @param Regs
  * @param ReadRegisterRequest
  *
  * @return BOOLEAN
  */
 BOOLEAN
-DebuggerCommandReadRegisters(GUEST_REGS *                        CpuidRegs,
+DebuggerCommandReadRegisters(GUEST_REGS *                        Regs,
                              PDEBUGGEE_REGISTER_READ_DESCRIPTION ReadRegisterRequest)
 {
     GUEST_EXTRA_REGISTERS ERegs = {0};
@@ -42,7 +42,7 @@ DebuggerCommandReadRegisters(GUEST_REGS *                        CpuidRegs,
         // Add General purpose registers
         //
         memcpy((PVOID)((CHAR *)ReadRegisterRequest + sizeof(DEBUGGEE_REGISTER_READ_DESCRIPTION)),
-               CpuidRegs,
+               Regs,
                sizeof(GUEST_REGS));
 
         //
@@ -66,7 +66,7 @@ DebuggerCommandReadRegisters(GUEST_REGS *                        CpuidRegs,
     }
     else
     {
-        ReadRegisterRequest->Value = DebuggerGetRegValueWrapper(CpuidRegs, ReadRegisterRequest->RegisterId);
+        ReadRegisterRequest->Value = DebuggerGetRegValueWrapper(Regs, ReadRegisterRequest->RegisterId);
     }
 
     return TRUE;
@@ -1164,7 +1164,7 @@ SearchAddressWrapper(PUINT64                 AddressToSaveResults,
             SearchMemRequest->Address = PhysicalAddressToVirtualAddressByProcessId((PVOID)StartAddress,
                                                                                    SearchMemRequest->ProcessId);
             EndAddress                = PhysicalAddressToVirtualAddressByProcessId((PVOID)EndAddress,
-                                                                    SearchMemRequest->ProcessId);
+                                                                                   SearchMemRequest->ProcessId);
         }
 
         //
@@ -1321,12 +1321,12 @@ DebuggerCommandFlush(PDEBUGGER_FLUSH_LOGGING_BUFFERS DebuggerFlushBuffersRequest
 NTSTATUS
 DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
 {
-    BOOLEAN RunCpuid     = TRUE;
-    UINT32 CpuidRegs[4]  = {0};
-    UINT32 FunctionId    = DebuggerCpuidRequest->FunctionId;
-    UINT32 SubFunctionId = DebuggerCpuidRequest->SubFunctionId;
-    UINT32 CacheIndex;
-    
+    BOOLEAN RunCpuid      = TRUE;
+    UINT32  CpuidRegs[4]  = {0};
+    UINT32  FunctionId    = DebuggerCpuidRequest->FunctionId;
+    UINT32  SubFunctionId = DebuggerCpuidRequest->SubFunctionId;
+    UINT32  CacheIndex;
+
     //
     // Zero out memory buffer
     //
@@ -1351,10 +1351,8 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
             }
         }
 
-        
-
         break;
-    
+
     //
     // EAX = 0Bh
     //
@@ -1381,7 +1379,7 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
         //
         // iteration for determining max subleaf supported by this leaf
         //
-        for (CacheIndex = 0; ;CacheIndex++)
+        for (CacheIndex = 0;; CacheIndex++)
         {
             CommonCpuidInstruction(FunctionId, CacheIndex, (INT32 *)CpuidRegs);
             if (CPUID_ECX_LEVEL_TYPE(CpuidRegs[2]) == 0)
@@ -1437,10 +1435,10 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
         // find max subleaf
         // subleaves 0 and 1 are always valid if SGX is supported, so we start iteration from 2
         //
-        for (CacheIndex = 2; ; CacheIndex++)
+        for (CacheIndex = 2;; CacheIndex++)
         {
             CommonCpuidInstruction(FunctionId, CacheIndex, (INT32 *)CpuidRegs);
-            
+
             //
             // type 0 means invalid - stop enumeration
             //
@@ -1461,7 +1459,7 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
         }
 
         break;
-    
+
     //
     // Leaves with same method to receive max subleaf: 7h, 14h, 18h (respectively)
     //
@@ -1503,11 +1501,10 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
         // because we already EXCLUSIVELY called CPUID for these leaves, we are not going to call it again,
         // as a result the RunCpuid flag is FALSE
         //
-        RunCpuid                              = FALSE;
+        RunCpuid = FALSE;
         break;
-
     }
-    
+
     //
     // Call CPUID function
     //
@@ -1524,7 +1521,7 @@ DebuggerCommandCpuid(PDEBUGGER_CPUID_REQUEST_RESPONSE DebuggerCpuidRequest)
     // Ensure the response contains the correct FunctionId and SubFunctionId
     // (they should already be set, but this makes it explicit)
     //
-    DebuggerCpuidRequest->FunctionId = FunctionId;
+    DebuggerCpuidRequest->FunctionId    = FunctionId;
     DebuggerCpuidRequest->SubFunctionId = SubFunctionId;
 
     DebuggerCpuidRequest->KernelStatus = DEBUGGER_OPERATION_WAS_SUCCESSFUL;
