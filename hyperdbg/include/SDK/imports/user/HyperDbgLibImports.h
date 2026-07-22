@@ -330,6 +330,13 @@ IMPORT_EXPORT_LIBHYPERDBG BOOLEAN
 hyperdbg_u_pt_mmap(HYPERTRACE_PT_MMAP_PACKETS * MmapRequest);
 
 //
+// CPUID related command
+// Exported functionality of the 'ucpuid', and 'cpuid' commands
+//
+IMPORT_EXPORT_LIBHYPERDBG BOOLEAN
+hyperdbg_u_user_cpuid(UINT32 FunctionId, UINT32 SubFunctionId);
+
+//
 // Transparent mode related command
 // Exported functionality of the '!hide', and '!unhide' commands
 //
