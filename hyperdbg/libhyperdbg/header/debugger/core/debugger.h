@@ -224,6 +224,11 @@ CommandFlushRequestFlush();
 VOID
 CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId);
 
+VOID
+CommandShowUserCpuidMessage(UINT32 FunctionId, 
+                            UINT32 SubFunctionId, 
+                            PDEBUGGER_CPUID_REQUEST_RESPONSE CpuidRequest);
+
 UINT64
 GetCommandAttributes(const string & FirstCommand);
 
