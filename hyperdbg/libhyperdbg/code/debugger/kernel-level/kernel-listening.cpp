@@ -56,6 +56,7 @@ ListeningSerialPortInDebugger()
     PDEBUGGEE_RESULT_OF_SEARCH_PACKET            SearchResultsPacket;
     PDEBUGGEE_DETAILS_AND_SWITCH_THREAD_PACKET   ChangeThreadPacket;
     PDEBUGGER_FLUSH_LOGGING_BUFFERS              FlushPacket;
+    PDEBUGGER_CPUID_REQUEST_RESPONSE             CpuidPacket;
     PDEBUGGER_CALLSTACK_REQUEST                  CallstackPacket;
     PDEBUGGER_SINGLE_CALLSTACK_FRAME             CallstackFramePacket;
     PDEBUGGER_DEBUGGER_TEST_QUERY_BUFFER         TestQueryPacket;
@@ -574,6 +575,29 @@ StartAgain:
             // Signal the event relating to receiving result of flushing
             //
             DbgReceivedKernelResponse(DEBUGGER_SYNCRONIZATION_OBJECT_KERNEL_DEBUGGER_FLUSH_RESULT);
+
+            break;
+
+        case DEBUGGER_REMOTE_PACKET_REQUESTED_ACTION_DEBUGGEE_RESULT_OF_USER_CPUID:
+
+            CpuidPacket = (DEBUGGER_CPUID_REQUEST_RESPONSE *)(((CHAR *)TheActualPacket) + sizeof(DEBUGGER_REMOTE_PACKET));
+
+            if (CpuidPacket->KernelStatus == DEBUGGER_OPERATION_WAS_SUCCESSFUL)
+            {
+                UINT32                          FunctionId    = CpuidPacket->FunctionId;
+                UINT32 SubFunctionId = CpuidPacket->SubFunctionId;
+
+                CommandShowUserCpuidMessage(FunctionId, SubFunctionId, CpuidPacket);
+            }
+            else
+            {
+                ShowErrorMessage(CpuidPacket->KernelStatus);
+            }
+
+            //
+            // Signal the event relating to receiving result of CPUID
+            //
+            DbgReceivedKernelResponse(DEBUGGER_SYNCRONIZATION_OBJECT_KERNEL_DEBUGGER_USER_CPUID_RESULT);
 
             break;
 

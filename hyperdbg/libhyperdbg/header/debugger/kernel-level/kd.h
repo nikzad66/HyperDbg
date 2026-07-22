@@ -98,6 +98,9 @@ BOOLEAN
 KdSendFlushPacketToDebuggee();
 
 BOOLEAN
+KdSendUserCpuidPacketToDebuggee(UINT32 FunctionId, UINT32 SubFunctionId);
+
+BOOLEAN
 KdSendCallStackPacketToDebuggee(UINT64                            BaseAddress,
                                 UINT32                            Size,
                                 DEBUGGER_CALLSTACK_DISPLAY_METHOD DisplayMethod,

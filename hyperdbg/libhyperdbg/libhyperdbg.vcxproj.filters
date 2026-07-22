@@ -736,6 +736,9 @@
     <ClCompile Include="code\debugger\misc\pt-helper.cpp">
       <Filter>code\debugger\misc</Filter>
     </ClCompile>
+    <ClCompile Include="ucpuid.cpp">
+      <Filter>code\debugger\commands\debugging-commands</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="code\assembly\asm-vmx-checks.asm">

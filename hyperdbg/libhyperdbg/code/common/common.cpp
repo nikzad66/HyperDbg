@@ -12,7 +12,7 @@
 #include "pch.h"
 
 #ifdef __linux__
-#    include <sys/stat.h> // struct stat / stat() for IsFileExistA
+#    include <sys/stat.h>  // struct stat / stat() for IsFileExistA
 #    include <immintrin.h> // Intel TSX RTM intrinsics (_xbegin/_xend); requires -mrtm
 #endif
 
@@ -381,62 +381,55 @@ ConvertStringToUInt32(string TextToConvert, PUINT32 Result)
     TextToConvert.erase(remove(TextToConvert.begin(), TextToConvert.end(), '`'),
                         TextToConvert.end());
 
+    int Base = IsDecimal ? 10 : 16;
+
     if (IsDecimal)
     {
         if (!IsDecimalNotation(TextToConvert))
         {
             return FALSE;
         }
-        else
-        {
-            try
-            {
-                INT I   = std::stoi(TextToConvert);
-                *Result = I;
-                return TRUE;
-            }
-            catch (std::invalid_argument const &)
-            {
-                //
-                // Bad input: std::invalid_argument thrown
-                //
-                return FALSE;
-            }
-            catch (std::out_of_range const &)
-            {
-                //
-                // Integer overflow: std::out_of_range thrown
-                //
-                return FALSE;
-            }
-
-            return FALSE;
-        }
     }
     else
     {
-        //
-        // It's not decimal
-        //
         if (!IsHexNotation(TextToConvert))
         {
             return FALSE;
         }
-        else
+    }
+
+    try
+    {
+        size_t             Pos = 0;
+        unsigned long long ULL = std::stoull(TextToConvert, &Pos, Base);
+
+        //
+        // Make sure the whole string was consumed and the value
+        // actually fits into 32 bits (stoull works in 64-bit space,
+        // so this catches overflow that stoi's signed 32-bit check
+        // would incorrectly flag or silently mishandle)
+        //
+        if (Pos != TextToConvert.size() || ULL > (std::numeric_limits<UINT32>::max)())
         {
-            //
-            // It's hex number
-            //
-            UINT32 TempResult;
-            TempResult = stoi(TextToConvert, nullptr, 16);
-
-            //
-            // Apply the results
-            //
-            *Result = TempResult;
-
-            return TRUE;
+            return FALSE;
         }
+
+        *Result = static_cast<UINT32>(ULL);
+        return TRUE;
+    }
+    catch (std::invalid_argument const &)
+    {
+        //
+        // Bad input: std::invalid_argument thrown
+        //
+        return FALSE;
+    }
+    catch (std::out_of_range const &)
+    {
+        //
+        // Integer overflow: std::out_of_range thrown
+        //
+        return FALSE;
     }
 }
 

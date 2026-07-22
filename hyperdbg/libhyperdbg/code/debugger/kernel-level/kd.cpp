@@ -336,6 +336,38 @@ KdSendFlushPacketToDebuggee()
 }
 
 /**
+ * @brief Send a CPUID request to the debuggee
+ *
+ * @return BOOLEAN
+ */
+BOOLEAN
+KdSendUserCpuidPacketToDebuggee(UINT32 FunctionId, UINT32 SubFunctionId)
+{
+    DEBUGGER_CPUID_REQUEST_RESPONSE CpuidPacket = {0};
+    CpuidPacket.FunctionId = FunctionId;
+    CpuidPacket.SubFunctionId = SubFunctionId;
+    
+    //
+    // Send 'ucpuid' command as CPUID packet
+    //
+    if (!KdCommandPacketAndBufferToDebuggee(
+            DEBUGGER_REMOTE_PACKET_TYPE_DEBUGGER_TO_DEBUGGEE_EXECUTE_ON_VMX_ROOT,
+            DEBUGGER_REMOTE_PACKET_REQUESTED_ACTION_ON_VMX_ROOT_MODE_USER_CPUID_REQUEST,
+            (CHAR *)&CpuidPacket,
+            sizeof(DEBUGGER_CPUID_REQUEST_RESPONSE)))
+    {
+        return FALSE;
+    }
+
+    //
+    // Wait until the result of CPUID received
+    //
+    DbgWaitForKernelResponse(DEBUGGER_SYNCRONIZATION_OBJECT_KERNEL_DEBUGGER_USER_CPUID_RESULT);
+
+    return TRUE;
+}
+
+/**
  * @brief Send a callstack request to the debuggee
  * @param BaseAddress
  * @param Size
