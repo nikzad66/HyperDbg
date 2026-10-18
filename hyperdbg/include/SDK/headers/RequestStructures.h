@@ -1773,6 +1773,15 @@ typedef struct _DEBUGGER_CPUID_REQUEST_RESPONSE
     UINT64 XCR0Vector;
     UINT64 IA32_XSS_Vector;
 
+    /* test part | begin */
+
+    INT32 xsetbv_result;
+    INT32 xgetbv_result;
+
+    /* test part | end */
+
+
+
     UINT32 KernelStatus;
 } DEBUGGER_CPUID_REQUEST_RESPONSE, *PDEBUGGER_CPUID_REQUEST_RESPONSE;
 

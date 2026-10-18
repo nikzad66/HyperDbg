@@ -225,6 +225,19 @@ TransparentAddNameOrProcessIdToTheList(PDEBUGGER_HIDE_AND_TRANSPARENT_DEBUGGER_M
     return TRUE;
 }
 
+
+/**
+ * @brief handle xsetbv (log)
+ *
+ * @param 
+ * @return VOID
+ */
+VOID
+HandleXsetbvHyperevade()
+{
+    return;
+}
+
 //
 // /**
 //  * @brief maximum random value

@@ -2124,13 +2124,14 @@ CommandCpuidRequestCpuid(UINT32 FunctionId, UINT32 SubFunctionId)
 
         if (CpuidRequest->KernelStatus == DEBUGGER_OPERATION_WAS_SUCCESSFUL)
         {
-            CommandShowUserCpuidMessage(FunctionId, SubFunctionId, CpuidRequest);
+            //CommandShowUserCpuidMessage(FunctionId, SubFunctionId, CpuidRequest);
+            ShowMessages("\tXSETBV run successfully...\n\n");
             return TRUE;
         }
 
         else
         {
-            ShowMessages("Receiving CPUID result was not successful\n");
+            ShowMessages("Receiving XSETBV result was not successful\n");
             return FALSE;
         }
     }
